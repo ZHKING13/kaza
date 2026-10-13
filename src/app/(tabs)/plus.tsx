@@ -10,6 +10,7 @@ import { DemoBanner } from '@/components/DemoBanner';
 import { Card } from '@/components/Card';
 import { KazaMark } from '@/components/KazaMark';
 import { Screen } from '@/components/Screen';
+import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
 import { prorataRules } from '@/data/prorata';
 import { useStore } from '@/data/store';
@@ -59,7 +60,7 @@ function Row({
 
 export default function Plus() {
   const { c, status } = useTheme();
-  const { settings, profile, mode, session, signOut, units } = useStore();
+  const { settings, profile, mode, session, signOut, units, outbox, remote } = useStore();
   const [confirmOut, setConfirmOut] = useState(false);
   return (
     <Screen title="Plus">
@@ -117,13 +118,19 @@ export default function Plus() {
         <Row icon={LifeBuoy} label="Aide sur WhatsApp" />
       </Card>
 
+      <SyncBanner />
+
       {confirmOut ? (
         <Card style={{ gap: space.sm, borderColor: status.late.fg }}>
           <Text variant="bodyStrong">{mode === 'demo' ? 'Quitter la démo ?' : 'Se déconnecter ?'}</Text>
           <Text variant="small" tone="muted">
             {mode === 'demo'
               ? 'Les données d’exemple seront effacées et vous reviendrez à l’écran d’accueil.'
-              : 'Vos biens, locataires et paiements enregistrés sur ce téléphone seront effacés.'}
+              : outbox.length
+                ? `Attention : ${outbox.length} enregistrement${outbox.length > 1 ? 's' : ''} pas encore envoyé${outbox.length > 1 ? 's' : ''} au serveur ${outbox.length > 1 ? 'seront perdus' : 'sera perdu'}. Reconnectez-vous au réseau avant de vous déconnecter.`
+                : remote
+                  ? 'Vos données restent sur votre compte : vous les retrouverez en vous reconnectant.'
+                  : 'Vos biens, locataires et paiements enregistrés sur ce téléphone seront effacés.'}
           </Text>
           <View style={{ flexDirection: 'row', gap: space.xs }}>
             <Button label="Annuler" variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmOut(false)} />

@@ -1,4 +1,4 @@
-import { api, newIdempotencyKey } from '@/lib/api';
+import { api } from '@/lib/api';
 import { periodOf } from '@/lib/format';
 
 import type { ProrataRule } from './prorata';
@@ -122,8 +122,41 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
   };
 }
 
+export type UnitBody = { id: string; label: string; rent: number };
+
+export type PropertyBody = {
+  id: string;
+  name: string;
+  type: PropertyType;
+  district: string;
+  city: string;
+  description?: string;
+  units: UnitBody[];
+};
+
+export type LeaseBody = {
+  id: string;
+  unitId: string;
+  tenant: { firstName: string; lastName: string; phone: string };
+  rent: number;
+  dueDay: number;
+  /** "YYYY-MM-DD" */
+  entryDate: string;
+  depositMonths: number;
+  advance?: { months: number; method: PaymentMethod };
+};
+
+export type PaymentBody = {
+  id: string;
+  leaseId: string;
+  amount: number;
+  method: PaymentMethod;
+  period: string;
+  receivedAt: string;
+};
+
 /** Date calendaire "YYYY-MM-DD" (heure locale) d'une date ISO de l'application. */
-const calendarDate = (iso: string) => {
+export const calendarDate = (iso: string) => {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
@@ -133,8 +166,8 @@ export const remote = {
 
   updateProfile: (firstName: string, lastName: string) => api.patch<ApiUser>('/user/me', { firstName, lastName }),
 
-  createOrganization: (name: string, countryCode: string) =>
-    api.post<ApiOrganization>('/user/organizations', { name, countryCode }),
+  createOrganization: (body: { id: string; name: string; countryCode: string }) =>
+    api.post<ApiOrganization>('/user/organizations', body),
 
   updateOrganization: (orgId: string, body: { prorataRule?: ProrataRule; name?: string }) =>
     api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
@@ -142,46 +175,19 @@ export const remote = {
   snapshot: async (orgId: string, today: Date) =>
     fromSnapshot(await api.get<ApiSnapshot>(`/user/organizations/${orgId}/snapshot`), today),
 
-  createProperty: (orgId: string, property: Omit<Property, 'id' | 'photo'>, units: { label: string; rent: number }[]) =>
-    api.post<{ id: string; units: { id: string; label: string; rent: number }[] }>(`/user/organizations/${orgId}/properties`, {
-      name: property.name,
-      type: property.type,
-      district: property.district,
-      city: property.city,
-      description: property.description,
-      units,
-    }),
+  createProperty: (orgId: string, body: PropertyBody) =>
+    api.post<{ id: string; units: { id: string; label: string; rent: number }[] }>(`/user/organizations/${orgId}/properties`, body),
 
-  addUnits: (orgId: string, propertyId: string, units: { label: string; rent: number }[]) =>
+  addUnits: (orgId: string, propertyId: string, units: UnitBody[]) =>
     api.post<{ id: string; label: string; rent: number }[]>(`/user/organizations/${orgId}/properties/${propertyId}/units`, { units }),
 
-  createLease: (
-    orgId: string,
-    input: {
-      unitId: string;
-      tenant: { firstName: string; lastName: string; phone: string };
-      rent: number;
-      dueDay: number;
-      entryDate?: string;
-      depositMonths: number;
-      advance?: { months: number; method: PaymentMethod };
-    },
-    idempotencyKey = newIdempotencyKey(),
-  ) =>
-    api.post<{ lease: { id: string }; payments: ApiPayment[] }>(
-      `/user/organizations/${orgId}/leases`,
-      {
-        ...input,
-        entryDate: calendarDate(input.entryDate ?? new Date().toISOString()),
-      },
-      { idempotencyKey },
-    ),
+  createLease: (orgId: string, body: LeaseBody, idempotencyKey: string) =>
+    api
+      .post<{ lease: { id: string }; payments: ApiPayment[] }>(`/user/organizations/${orgId}/leases`, body, { idempotencyKey })
+      .then((res) => ({ leaseId: res.lease.id, payments: res.payments.map(toPayment) })),
 
-  createPayment: (
-    orgId: string,
-    input: { leaseId: string; amount: number; method: PaymentMethod; period: string; receivedAt: string },
-    idempotencyKey = newIdempotencyKey(),
-  ) => api.post<ApiPayment>(`/user/organizations/${orgId}/payments`, input, { idempotencyKey }).then(toPayment),
+  createPayment: (orgId: string, body: PaymentBody, idempotencyKey: string) =>
+    api.post<ApiPayment>(`/user/organizations/${orgId}/payments`, body, { idempotencyKey }).then(toPayment),
 
   logout: () => api.post<void>('/user/auth/logout', {}),
 };

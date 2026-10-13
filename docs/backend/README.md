@@ -126,8 +126,10 @@ conditions d'utilisation versionnées, feature flags, import/export, géolocalis
 - `src/data/store.tsx` : cache local relu au démarrage puis remplacé par `GET …/snapshot` ; écritures envoyées au serveur
   (avec `Idempotency-Key` pour les locataires et les encaissements) avant de modifier le téléphone.
 
-Reste : file d'envoi hors ligne (écritures rejouées au retour du réseau), départ et solde côté serveur, photos (stockage objet),
-connexion Google / Apple dans l'application.
+- File d'envoi hors ligne : écritures gardées sur le téléphone et rejouées au retour du réseau ; identifiants choisis par
+  l'application (UUID) et acceptés par l'API, donc rejeu sans doublon.
+
+Reste : départ et solde côté serveur, photos (stockage objet), connexion Google / Apple dans l'application.
 
 ## 8. Plan de livraison
 

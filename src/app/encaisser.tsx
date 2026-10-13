@@ -31,7 +31,7 @@ function Label({ children }: { children: string }) {
 export default function Encaisser() {
   const { c, status } = useTheme();
   const params = useLocalSearchParams<{ tenantId?: string; propertyId?: string }>();
-  const { addPayment, today, period } = useStore();
+  const { addPayment, today, period, outbox } = useStore();
   const summaries = useTenantSummaries();
 
   const candidates = useMemo(
@@ -100,6 +100,11 @@ export default function Encaisser() {
             <Text tone="muted" style={{ textAlign: 'center' }}>
               {formatAmount(done.amount)} de {selected.tenant.firstName} {selected.tenant.lastName} · {methods[method].label}
             </Text>
+            {outbox.some((e) => e.kind === 'createPayment' && e.body.id === done.paymentId) ? (
+              <Text variant="small" tone="muted" style={{ textAlign: 'center' }}>
+                Pas de réseau : enregistré sur ce téléphone, envoyé automatiquement dès le retour de la connexion.
+              </Text>
+            ) : null}
           </View>
           <Button
             label="Voir la quittance"

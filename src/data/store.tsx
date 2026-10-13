@@ -1,17 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { AppState, Platform } from 'react-native';
 
-import { api } from '@/lib/api';
+import { api, errorMessage, newIdempotencyKey } from '@/lib/api';
 import { endSession } from '@/lib/auth';
 import { isApiConfigured } from '@/lib/config';
-import { periodOf } from '@/lib/format';
+import { formatAmount, periodOf } from '@/lib/format';
 
 import { countries, splitPhone } from './countries';
 
 import { buildPayments, units, properties, tenants } from './mock';
 import { computeSettlement } from './ledger';
 import { type ProrataRule, rentForPeriod } from './prorata';
-import { type ApiUser, remote, type RemoteData, toPayment } from './remote';
+import { isRetryable, type OutboxDraft, type OutboxEntry, type OutboxFailure, type OutboxResult, retryDelay, sendOutboxEntry } from './outbox';
+import { type ApiUser, calendarDate, remote, type RemoteData } from './remote';
 import type { Payment, PaymentMethod, Property, Settlement, Tenant, TenantSummary, Unit } from './types';
 
 export type Settings = {
@@ -48,6 +51,10 @@ type State = {
   organizationId: string | null;
   /** Dernière synchronisation réussie avec le serveur (ISO) */
   syncedAt: string | null;
+  /** Écritures pas encore envoyées au serveur (pas de réseau), dans l'ordre */
+  outbox: OutboxEntry[];
+  /** Écritures refusées par le serveur au moment de l'envoi, à montrer à l'utilisateur */
+  outboxFailures: OutboxFailure[];
   profile: Profile;
   settings: Settings;
   properties: Property[];
@@ -64,7 +71,13 @@ type Action =
   | { type: 'signOut' }
   | { type: 'remoteAccount'; profile: Partial<Profile>; organizationId: string | null }
   | { type: 'remoteLoaded'; data: RemoteData; syncedAt: string }
-  | { type: 'setOrganization'; organizationId: string }
+  | { type: 'setOrganization'; organizationId: string | null }
+  | { type: 'enqueue'; entry: OutboxEntry }
+  | { type: 'dequeue'; key: string }
+  | { type: 'outboxAttempt'; key: string }
+  | { type: 'outboxFailed'; failure: OutboxFailure }
+  | { type: 'dismissOutboxFailures' }
+  | { type: 'replaceLeasePayments'; leaseId: string; removeIds: string[]; payments: Payment[] }
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'setProfile'; profile: Partial<Profile> }
   | { type: 'addPayment'; payment: Payment }
@@ -96,6 +109,29 @@ function reducer(state: State, action: Action): State {
       };
     case 'setOrganization':
       return { ...state, organizationId: action.organizationId };
+    case 'enqueue':
+      return { ...state, outbox: [...state.outbox, action.entry] };
+    case 'dequeue':
+      return { ...state, outbox: state.outbox.filter((e) => e.key !== action.key) };
+    case 'outboxAttempt':
+      return { ...state, outbox: state.outbox.map((e) => (e.key === action.key ? { ...e, attempts: e.attempts + 1 } : e)) };
+    case 'outboxFailed':
+      return {
+        ...state,
+        outbox: state.outbox.filter((e) => e.key !== action.failure.key),
+        outboxFailures: [...state.outboxFailures, action.failure],
+      };
+    case 'dismissOutboxFailures':
+      return { ...state, outboxFailures: [] };
+    case 'replaceLeasePayments': {
+      // L'avance calculée sur le téléphone est remplacée par celle du serveur (identifiants du serveur)
+      const removed = new Set(action.removeIds);
+      const known = new Set(state.payments.map((p) => p.id));
+      return {
+        ...state,
+        payments: [...action.payments.filter((p) => !known.has(p.id)), ...state.payments.filter((p) => !removed.has(p.id))],
+      };
+    }
     case 'remoteLoaded': {
       // Les photos ne sont pas encore envoyées au serveur : on garde celles du téléphone
       const photos = new Map(state.properties.filter((p) => p.photo).map((p) => [p.id, p.photo]));
@@ -173,6 +209,9 @@ type Store = State & {
   addTenant: (input: NewTenant) => Promise<string>;
   /** Enregistre le départ : solde de tout compte, impayés retenus sur la caution, unité libérée. */
   recordDeparture: (input: Departure) => Promise<Settlement>;
+  /** Relance tout de suite l'envoi des écritures en attente */
+  retryOutbox: () => void;
+  dismissOutboxFailures: () => void;
 };
 
 export type Departure = {
@@ -194,10 +233,10 @@ export function advancePeriods(months: number, entry: Date): string[] {
   return Array.from({ length: months }, (_, i) => periodOf(new Date(entry.getFullYear(), entry.getMonth() + i, 1)));
 }
 
-let seq = 0;
-const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
+/** Identifiants choisis par le téléphone (UUID) : une création faite hors ligne garde le même identifiant sur le serveur. */
+const newId = (): string => Crypto.randomUUID();
 const toUnits = (propertyId: string, units: NewUnit[]): Unit[] =>
-  units.map((u) => ({ id: newId('u'), propertyId, label: u.label.trim(), rent: u.rent }));
+  units.map((u) => ({ id: newId(), propertyId, label: u.label.trim(), rent: u.rent }));
 
 const STORAGE_KEY = 'kaza/state/v1';
 /** Champs sauvegardés sur le téléphone */
@@ -214,6 +253,8 @@ const PERSISTED = [
   'units',
   'tenants',
   'payments',
+  'outbox',
+  'outboxFailures',
 ] as const;
 
 function emptyState(): State {
@@ -231,6 +272,8 @@ function emptyState(): State {
     units: [],
     tenants: [],
     payments: [],
+    outbox: [],
+    outboxFailures: [],
   };
 }
 
@@ -269,18 +312,112 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => api.onSessionExpired(null);
   }, []);
 
-  // Compte en ligne : l'application s'ouvre sur le cache, puis se met à jour depuis le serveur
+  // Dernier état, pour la file d'envoi qui tourne entre deux rendus
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const loadRemote = async (organizationId: string) => {
+    const data = await remote.snapshot(organizationId, new Date());
+    // Des écritures attendent encore d'être envoyées : le serveur ne les connaît pas, on garde le téléphone
+    if (stateRef.current.outbox.length > 0) return;
+    dispatch({ type: 'remoteLoaded', data, syncedAt: new Date().toISOString() });
+  };
+
+  // ── File d'envoi ──────────────────────────────────────────────────────────────
+  const flushing = useRef(false);
+  const flushAgain = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const afterSent = (result: OutboxResult) => {
+    if (result.kind === 'lease') {
+      dispatch({ type: 'replaceLeasePayments', leaseId: result.leaseId, removeIds: result.localPaymentIds, payments: result.payments });
+    }
+  };
+
+  const scheduleRetry = (attempts: number) => {
+    clearTimeout(retryTimer.current);
+    retryTimer.current = setTimeout(() => void flush(), retryDelay(attempts));
+  };
+
+  /** Envoie les écritures en attente, dans l'ordre ; s'arrête au premier échec réseau. */
+  const flush = async (): Promise<void> => {
+    if (flushing.current) {
+      flushAgain.current = true;
+      return;
+    }
+    const { remote: online, session } = stateRef.current;
+    if (!online || !session || !isApiConfigured) return;
+    flushing.current = true;
+    clearTimeout(retryTimer.current);
+    const done = new Set<string>();
+    let sentOrRefused = 0;
+    let blocked = false;
+    try {
+      for (;;) {
+        const next = stateRef.current.outbox.find((e) => !done.has(e.key));
+        if (!next) break;
+        try {
+          const result = await sendOutboxEntry(next);
+          done.add(next.key);
+          sentOrRefused++;
+          afterSent(result);
+          dispatch({ type: 'dequeue', key: next.key });
+        } catch (error) {
+          if (isRetryable(error)) {
+            dispatch({ type: 'outboxAttempt', key: next.key });
+            scheduleRetry(next.attempts + 1);
+            blocked = true;
+            break;
+          }
+          // Refusée par le serveur : la rejouer ne changerait rien. On la retire et on prévient.
+          done.add(next.key);
+          sentOrRefused++;
+          dispatch({
+            type: 'outboxFailed',
+            failure: { key: next.key, label: next.label, message: errorMessage(error), at: new Date().toISOString() },
+          });
+        }
+      }
+    } finally {
+      flushing.current = false;
+    }
+    // File vide : le serveur fait foi (retire aussi du téléphone ce qui a été refusé)
+    if (!blocked && sentOrRefused > 0 && stateRef.current.organizationId) {
+      await new Promise((r) => setTimeout(r, 0));
+      await loadRemote(stateRef.current.organizationId).catch(() => {});
+    }
+    if (flushAgain.current) {
+      flushAgain.current = false;
+      await flush();
+    }
+  };
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  // Au démarrage : envoyer ce qui attend, sinon relire le serveur. L'application s'ouvre sur le cache.
   const startupSync = useRef(false);
   useEffect(() => {
     if (!state.hydrated || startupSync.current) return;
     startupSync.current = true;
-    if (state.remote && state.session && state.organizationId) {
-      remote
-        .snapshot(state.organizationId, new Date())
-        .then((data) => dispatch({ type: 'remoteLoaded', data, syncedAt: new Date().toISOString() }))
-        .catch(() => {});
-    }
-  }, [state.hydrated, state.remote, state.session, state.organizationId]);
+    if (!state.remote || !state.session) return;
+    if (state.outbox.length > 0) void flushRef.current();
+    else if (state.organizationId) loadRemote(state.organizationId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.hydrated]);
+
+  // Retour dans l'application ou du réseau (web) : nouvelle tentative
+  useEffect(() => {
+    const retry = () => {
+      if (stateRef.current.outbox.length > 0) void flushRef.current();
+    };
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && retry());
+    if (Platform.OS === 'web') globalThis.addEventListener?.('online', retry);
+    return () => {
+      sub.remove();
+      if (Platform.OS === 'web') globalThis.removeEventListener?.('online', retry);
+      clearTimeout(retryTimer.current);
+    };
+  }, []);
 
   // Sauvegarde après chaque changement (regroupé sur 300 ms)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -303,9 +440,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Store>(() => {
     const online = state.remote && isApiConfigured;
 
-    const loadRemote = async (organizationId: string) => {
-      const data = await remote.snapshot(organizationId, new Date());
-      dispatch({ type: 'remoteLoaded', data, syncedAt: new Date().toISOString() });
+    /**
+     * Une écriture vers le serveur. File vide : envoi direct, le téléphone n'est modifié qu'après
+     * l'accord du serveur (une erreur de saisie s'affiche dans le formulaire). Sans réseau, ou si
+     * d'autres écritures attendent déjà : modification du téléphone tout de suite et mise en file.
+     */
+    const write = async (op: OutboxDraft, applyLocal: () => void) => {
+      const entry = { ...op, key: newIdempotencyKey(), createdAt: new Date().toISOString(), attempts: 0 } as OutboxEntry;
+      if (stateRef.current.outbox.length === 0 && !flushing.current) {
+        try {
+          const result = await sendOutboxEntry(entry);
+          applyLocal();
+          afterSent(result);
+          return;
+        } catch (error) {
+          if (!isRetryable(error)) throw error;
+          applyLocal();
+          dispatch({ type: 'enqueue', entry: { ...entry, attempts: 1 } });
+          scheduleRetry(1);
+          return;
+        }
+      }
+      applyLocal();
+      dispatch({ type: 'enqueue', entry });
+      setTimeout(() => void flushRef.current(), 0);
     };
 
     /** Espace du compte ; créé au premier bien (ou à la fin de l'onboarding) s'il n'existe pas. */
@@ -314,13 +472,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       creatingOrganization.current ??= (async () => {
         const country = splitPhone(state.profile.phone || '', countries[0]).country;
         const name = `${state.profile.firstName} ${state.profile.lastName}`.trim() || 'Mon espace';
-        const organization = await remote.createOrganization(name, country.code);
-        organizationRef.current = organization.id;
-        dispatch({ type: 'setOrganization', organizationId: organization.id });
-        if (state.settings.prorata !== organization.prorataRule) {
-          await remote.updateOrganization(organization.id, { prorataRule: state.settings.prorata });
+        const id = newId();
+        organizationRef.current = id;
+        try {
+          await write(
+            {
+              kind: 'createOrganization',
+              body: { id, name, countryCode: country.code },
+              prorataRule: state.settings.prorata,
+              label: `Espace « ${name} »`,
+            },
+            () => dispatch({ type: 'setOrganization', organizationId: id }),
+          );
+        } catch (error) {
+          organizationRef.current = null;
+          throw error;
         }
-        return organization.id;
+        return id;
       })().finally(() => {
         creatingOrganization.current = null;
       });
@@ -349,8 +517,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (organizationId) await loadRemote(organizationId);
       },
       refresh: async () => {
-        if (online && organizationRef.current) await loadRemote(organizationRef.current);
+        if (!online) return;
+        if (state.outbox.length > 0) await flushRef.current();
+        else if (organizationRef.current) await loadRemote(organizationRef.current);
       },
+      retryOutbox: () => void flushRef.current(),
+      dismissOutboxFailures: () => dispatch({ type: 'dismissOutboxFailures' }),
       completeOnboarding: async () => {
         if (online) await ensureOrganization();
         dispatch({ type: 'completeOnboarding' });
@@ -358,108 +530,151 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       startDemo: () => dispatch({ type: 'loadDemo', state: demoState(new Date()) }),
       signOut: () => {
         if (state.remote) endSession().catch(() => {});
+        clearTimeout(retryTimer.current);
         AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
         dispatch({ type: 'signOut' });
       },
       setSettings: async (settings) => {
+        const apply = () => dispatch({ type: 'setSettings', settings });
+        // Sans espace encore, la règle part avec la création de l'espace
         if (online && settings.prorata && organizationRef.current) {
-          await remote.updateOrganization(organizationRef.current, { prorataRule: settings.prorata });
+          await write(
+            {
+              kind: 'updateOrganization',
+              orgId: organizationRef.current,
+              body: { prorataRule: settings.prorata },
+              label: 'Règle des mois incomplets',
+            },
+            apply,
+          );
+          return;
         }
-        dispatch({ type: 'setSettings', settings });
+        apply();
       },
       setProfile: async (profile) => {
-        if (online) {
-          const firstName = profile.firstName ?? state.profile.firstName;
-          const lastName = profile.lastName ?? state.profile.lastName;
-          if (firstName && lastName) await remote.updateProfile(firstName, lastName);
+        const apply = () => dispatch({ type: 'setProfile', profile });
+        const firstName = profile.firstName ?? state.profile.firstName;
+        const lastName = profile.lastName ?? state.profile.lastName;
+        if (online && firstName && lastName) {
+          await write({ kind: 'updateProfile', body: { firstName, lastName }, label: 'Votre profil' }, apply);
+          return;
         }
-        dispatch({ type: 'setProfile', profile });
+        apply();
       },
       addPayment: async (payment) => {
+        const id = newId();
+        const apply = () => dispatch({ type: 'addPayment', payment: { ...payment, id } });
         if (online) {
-          const organizationId = await ensureOrganization();
-          const saved = await remote.createPayment(organizationId, {
-            leaseId: payment.tenantId,
-            amount: payment.amount,
-            method: payment.method,
-            period: payment.period,
-            receivedAt: payment.date,
-          });
-          dispatch({ type: 'addPayment', payment: saved });
-          return saved.id;
+          const orgId = await ensureOrganization();
+          const tenant = state.tenants.find((t) => t.id === payment.tenantId);
+          await write(
+            {
+              kind: 'createPayment',
+              orgId,
+              body: {
+                id,
+                leaseId: payment.tenantId,
+                amount: payment.amount,
+                method: payment.method,
+                period: payment.period,
+                receivedAt: payment.date,
+              },
+              label: `Encaissement de ${formatAmount(payment.amount)}${tenant ? ` (${tenant.firstName} ${tenant.lastName})` : ''}`,
+            },
+            apply,
+          );
+          return id;
         }
-        const id = newId('pay');
-        dispatch({ type: 'addPayment', payment: { ...payment, id } });
+        apply();
         return id;
       },
       addProperty: async (property, units) => {
+        const id = newId();
+        const newUnits = toUnits(id, units);
+        const apply = () => dispatch({ type: 'addProperty', property: { ...property, id }, units: newUnits });
         if (online) {
-          const organizationId = await ensureOrganization();
-          const { photo, ...rest } = property;
-          const saved = await remote.createProperty(
-            organizationId,
-            rest,
-            units.map((u) => ({ label: u.label.trim(), rent: u.rent })),
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'createProperty',
+              orgId,
+              body: {
+                id,
+                name: property.name,
+                type: property.type,
+                district: property.district,
+                city: property.city,
+                description: property.description,
+                units: newUnits.map(({ id: unitId, label, rent }) => ({ id: unitId, label, rent })),
+              },
+              label: `Bien « ${property.name} »`,
+            },
+            apply,
           );
-          dispatch({
-            type: 'addProperty',
-            property: { ...property, id: saved.id, photo },
-            units: saved.units.map((u) => ({ ...u, propertyId: saved.id })),
-          });
-          return saved.id;
+          return id;
         }
-        const id = newId('p');
-        dispatch({ type: 'addProperty', property: { ...property, id }, units: toUnits(id, units) });
+        apply();
         return id;
       },
       addUnits: async (propertyId, units) => {
+        const newUnits = toUnits(propertyId, units);
+        const apply = () => dispatch({ type: 'addUnits', units: newUnits });
         if (online) {
-          const organizationId = await ensureOrganization();
-          const saved = await remote.addUnits(
-            organizationId,
-            propertyId,
-            units.map((u) => ({ label: u.label.trim(), rent: u.rent })),
+          const orgId = await ensureOrganization();
+          const property = state.properties.find((p) => p.id === propertyId);
+          await write(
+            {
+              kind: 'addUnits',
+              orgId,
+              propertyId,
+              units: newUnits.map(({ id, label, rent }) => ({ id, label, rent })),
+              label: `${newUnits.length} unité${newUnits.length > 1 ? 's' : ''}${property ? ` (${property.name})` : ''}`,
+            },
+            apply,
           );
-          dispatch({ type: 'addUnits', units: saved.map((u) => ({ ...u, propertyId })) });
           return;
         }
-        dispatch({ type: 'addUnits', units: toUnits(propertyId, units) });
+        apply();
       },
       addTenant: async ({ rent, advanceMonths, advanceMethod, ...rest }) => {
-        if (online) {
-          const organizationId = await ensureOrganization();
-          // Le serveur calcule la caution et l'avance (règle de prorata de l'espace)
-          const saved = await remote.createLease(organizationId, {
-            unitId: rest.unitId,
-            tenant: { firstName: rest.firstName, lastName: rest.lastName, phone: rest.phone },
-            rent,
-            dueDay: rest.dueDay,
-            entryDate: rest.entryDate,
-            depositMonths: rest.depositMonths,
-            advance: advanceMonths > 0 ? { months: advanceMonths, method: advanceMethod } : undefined,
-          });
-          const id = saved.lease.id;
-          dispatch({
-            type: 'addTenant',
-            tenant: { ...rest, id, advanceMonthsLeft: advanceMonths },
-            rent,
-            payments: saved.payments.map(toPayment),
-          });
-          return id;
-        }
-        const id = newId('t');
+        const id = newId();
         const now = new Date();
-        // L'avance couvre les mois à partir du mois d'entrée
+        // L'avance couvre les mois à partir du mois d'entrée (recalculée par le serveur en ligne)
         const entry = rest.entryDate ? new Date(rest.entryDate) : now;
         const payments: Payment[] = advancePeriods(advanceMonths, entry).map((period) => ({
-          id: newId('pay'),
+          id: newId(),
           tenantId: id,
           amount: rentForPeriod(rent, period, state.settings.prorata, rest.entryDate).amount,
           method: advanceMethod,
           date: now.toISOString(),
           period,
         }));
-        dispatch({ type: 'addTenant', tenant: { ...rest, id, advanceMonthsLeft: advanceMonths }, rent, payments });
+        const apply = () =>
+          dispatch({ type: 'addTenant', tenant: { ...rest, id, advanceMonthsLeft: advanceMonths }, rent, payments });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'createLease',
+              orgId,
+              body: {
+                id,
+                unitId: rest.unitId,
+                tenant: { firstName: rest.firstName, lastName: rest.lastName, phone: rest.phone },
+                rent,
+                dueDay: rest.dueDay,
+                entryDate: calendarDate(rest.entryDate ?? now.toISOString()),
+                depositMonths: rest.depositMonths,
+                advance: advanceMonths > 0 ? { months: advanceMonths, method: advanceMethod } : undefined,
+              },
+              localPaymentIds: payments.map((p) => p.id),
+              label: `Locataire ${rest.firstName} ${rest.lastName}`,
+            },
+            apply,
+          );
+          return id;
+        }
+        apply();
         return id;
       },
       recordDeparture: async ({ tenantId, exitDate, deductArrears, deductions, refundMethod }) => {
@@ -484,7 +699,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (const a of b.arrearsByPeriod) {
           if (left <= 0) break;
           const amount = Math.min(a.amount, left);
-          addPayments.push({ id: newId('pay'), tenantId, amount, method: 'caution', date: exitDate, period: a.period });
+          addPayments.push({ id: newId(), tenantId, amount, method: 'caution', date: exitDate, period: a.period });
           left -= amount;
         }
         const settlement: Settlement = {
@@ -504,6 +719,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return settlement;
       },
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, today]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

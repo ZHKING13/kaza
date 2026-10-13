@@ -6,6 +6,9 @@ Toute requête porte `x-api-key: <key>:<secret>` (clé de l'application, type `d
 Authentification : `Authorization: Bearer <access token>` en plus, sauf mention « public ».
 Réponses au format ack : `{ statusCode, message, metadata, data }` ; langue des messages : français par défaut, `x-custom-lang: en` sinon.
 Les écritures d'argent acceptent `Idempotency-Key: <uuid>` (rejeu sans doublon).
+Les créations (espace, bien et ses unités, unités, bail, paiement) acceptent aussi un `id` (UUID) choisi par l'application :
+rejouer la même création renvoie l'enregistrement existant ; un `id` déjà pris ailleurs donne 409 `idConflict`.
+C'est ce qui permet la file d'envoi hors ligne de l'application.
 
 Erreurs : `{ "statusCode": 5xxxx, "statusCodeKey": "otpInvalid", "module": "auth", "message": "Code incorrect.", "metadata": {…} }`
 (messages en français, prêts à afficher). Les codes d'erreur ci-dessous correspondent à `statusCodeKey`.

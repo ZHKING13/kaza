@@ -12,6 +12,7 @@ import { DemoBanner } from '@/components/DemoBanner';
 import { PaymentRow } from '@/components/PaymentRow';
 import { StartChecklist } from '@/components/StartChecklist';
 import { createAccountFromDemo } from '@/lib/demo';
+import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
 import { useMonthTotals, useStore, useTenantSummaries } from '@/data/store';
 import { formatAmount, formatNumber, formatPeriod } from '@/lib/format';
@@ -74,6 +75,7 @@ export default function Accueil() {
             Vous explorez la démo : biens et locataires fictifs.
           </DemoBanner>
         ) : null}
+        <SyncBanner />
         {/* Résumé du mois : la réponse à « où en sont mes loyers ? » */}
         {summaries.length ? (
           <>
@@ -95,7 +97,7 @@ export default function Accueil() {
                   {pct} % de {formatNumber(totals.expected)}
                 </Text>
                 <Text variant="caption" color={c.onPrimary}>
-                  {totals.paidCount} / {totals.tenantCount} locataires à jour
+                  {totals.paidCount} / {totals.tenantCount} locataire{totals.tenantCount > 1 ? 's' : ''} à jour
                 </Text>
               </View>
             </View>
@@ -142,7 +144,7 @@ export default function Accueil() {
             }}>
             <View style={{ flex: 1 }}>
               <Text variant="bodyStrong" color={status.late.fg}>
-                {totals.lateCount} locataires en retard
+                {totals.lateCount} locataire{totals.lateCount > 1 ? 's' : ''} en retard
               </Text>
               <Text variant="small" color={status.late.fg}>
                 {formatAmount(totals.outstanding)} à recevoir
