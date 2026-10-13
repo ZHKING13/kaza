@@ -1,6 +1,6 @@
 import type { RentStatus } from '@/theme/tokens';
 
-export type PaymentMethod = 'cash' | 'orange' | 'mtn' | 'wave' | 'moov';
+export type PaymentMethod = 'cash' | 'orange' | 'mtn' | 'wave' | 'moov' | 'caution';
 
 export type PropertyType = 'cour' | 'immeuble' | 'villa' | 'magasin';
 
@@ -36,6 +36,23 @@ export type Tenant = {
   depositMonths: number;
   /** Date d'entrée dans le logement (ISO) */
   entryDate?: string;
+  /** Date de départ (ISO) : le locataire devient un ancien locataire */
+  exitDate?: string;
+  settlement?: Settlement;
+};
+
+/** Solde de tout compte établi au départ du locataire. */
+export type Settlement = {
+  deposit: number;
+  prepaid: number;
+  /** Impayés retenus sur la caution */
+  arrearsDeducted: number;
+  /** Impayés laissés à la charge du locataire */
+  arrearsLeft: number;
+  deductions: { label: string; amount: number }[];
+  /** > 0 : à rembourser au locataire ; < 0 : le locataire doit encore ce montant */
+  balance: number;
+  refundMethod?: PaymentMethod;
 };
 
 export type Payment = {

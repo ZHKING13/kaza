@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { DateField } from '@/components/DateField';
 import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
 import { Stepper } from '@/components/Stepper';
@@ -17,7 +18,7 @@ import { countries, type Country, groupDigits, splitPhone } from '@/data/countri
 import { methodOrder, methods } from '@/data/methods';
 import { useStore } from '@/data/store';
 import type { PaymentMethod } from '@/data/types';
-import { formatAmount, formatNumber, formatPeriod } from '@/lib/format';
+import { formatAmount, formatNumber, formatPeriod, periodOf } from '@/lib/format';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { fonts, radius, space, useTheme } from '@/theme';
 
@@ -42,12 +43,9 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
-/** Mois couverts par l'avance, ex. « octobre 2026 à décembre 2026 » */
-function advanceRange(months: number, today: Date) {
-  const p = (i: number) => {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    return formatPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  };
+/** Mois couverts par l'avance à partir du mois d'entrée, ex. « octobre 2026 à décembre 2026 » */
+function advanceRange(months: number, from: Date) {
+  const p = (i: number) => formatPeriod(periodOf(new Date(from.getFullYear(), from.getMonth() + i, 1)));
   return months <= 1 ? p(0) : `${p(0)} à ${p(months - 1)}`;
 }
 
@@ -58,7 +56,7 @@ export default function NouveauLocataire() {
   const { units, tenants, properties, addTenant, today } = useStore();
 
   const vacant = useMemo(() => {
-    const occupied = new Set(tenants.map((t) => t.unitId));
+    const occupied = new Set(tenants.filter((t) => !t.exitDate).map((t) => t.unitId));
     return units.filter((u) => !occupied.has(u.id));
   }, [units, tenants]);
 
@@ -75,6 +73,10 @@ export default function NouveauLocataire() {
   const [national, setNational] = useState('');
   const [rent, setRent] = useState(unit?.rent ?? 0);
   const [dueDay, setDueDay] = useState(5);
+  const [entryDate, setEntryDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString());
+  const entry = new Date(entryDate);
+  const entryPeriod = periodOf(entry);
+  const currentPeriod = periodOf(today);
   const [advance, setAdvance] = useState(1);
   const [advanceMethod, setAdvanceMethod] = useState<PaymentMethod>('cash');
   const [deposit, setDeposit] = useState(2);
@@ -132,7 +134,7 @@ export default function NouveauLocataire() {
       unitId: unit.id,
       dueDay,
       depositMonths: deposit,
-      entryDate: today.toISOString(),
+      entryDate,
       rent,
       advanceMonths: advance,
       advanceMethod,
@@ -144,7 +146,7 @@ export default function NouveauLocataire() {
     const welcome =
       `Bonjour ${firstName.trim()}, bienvenue à ${property.name} (${unit.label}) ! ` +
       `Votre loyer est de ${formatAmount(rent)}, à régler le ${dueDay} de chaque mois. ` +
-      (advance > 0 ? `Votre avance couvre ${advanceRange(advance, today)}. ` : '') +
+      (advance > 0 ? `Votre avance couvre ${advanceRange(advance, entry)}. ` : '') +
       (deposit > 0 ? `Caution reçue : ${formatAmount(deposit * rent)}. ` : '') +
       `Vous recevrez vos quittances sur WhatsApp. Kaza`;
     return (
@@ -171,7 +173,7 @@ export default function NouveauLocataire() {
             </Text>
             {advance > 0 ? (
               <Text variant="small" color={status.paid.fg} style={{ textAlign: 'center' }}>
-                Avance enregistrée : {advanceRange(advance, today)} ({formatAmount(advance * rent)})
+                Avance enregistrée : {advanceRange(advance, entry)} ({formatAmount(advance * rent)})
               </Text>
             ) : null}
           </View>
@@ -336,6 +338,20 @@ export default function NouveauLocataire() {
             }
             style={{ fontVariant: ['tabular-nums'] }}
           />
+          <DateField
+            label="Date d’entrée"
+            value={entryDate}
+            onChange={setEntryDate}
+            min={new Date(today.getFullYear() - 2, today.getMonth(), 1)}
+            max={new Date(today.getFullYear(), today.getMonth() + 3, 0)}
+            helper={
+              entryPeriod > currentPeriod
+                ? `Aucun loyer ne sera attendu avant ${formatPeriod(entryPeriod)}.`
+                : entryPeriod < currentPeriod
+                  ? 'Entrée passée : enregistrez ensuite les loyers déjà reçus depuis cette date.'
+                  : undefined
+            }
+          />
           <View style={{ gap: 6 }}>
             <FieldLabel>Jour de paiement</FieldLabel>
             <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
@@ -352,8 +368,8 @@ export default function NouveauLocataire() {
             <Stepper label="Mois d’avance" value={advance} onChange={setAdvance} max={12} unit={(n) => (n === 0 ? 'Aucune' : `${n} mois`)} />
             <Text variant="small" tone="muted">
               {advance > 0 && rent > 0
-                ? `${advance} × ${formatNumber(rent)} = ${formatAmount(advance * rent)}, enregistrés comme loyers payés pour ${advanceRange(advance, today)}.`
-                : 'Aucune avance : le premier loyer sera attendu ce mois-ci.'}
+                ? `${advance} × ${formatNumber(rent)} = ${formatAmount(advance * rent)}, enregistrés comme loyers payés pour ${advanceRange(advance, entry)}.`
+                : `Aucune avance : le premier loyer sera attendu en ${formatPeriod(entryPeriod)}.`}
             </Text>
           </View>
           {advance > 0 ? (

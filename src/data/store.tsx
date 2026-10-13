@@ -3,7 +3,8 @@ import { createContext, useContext, useMemo, useReducer, type ReactNode } from '
 import { periodOf } from '@/lib/format';
 
 import { buildPayments, units, properties, tenants } from './mock';
-import type { Payment, PaymentMethod, Property, Tenant, TenantSummary, Unit } from './types';
+import { computeSettlement } from './ledger';
+import type { Payment, PaymentMethod, Property, Settlement, Tenant, TenantSummary, Unit } from './types';
 
 type State = {
   properties: Property[];
@@ -16,7 +17,8 @@ type Action =
   | { type: 'addPayment'; payment: Omit<Payment, 'id'> }
   | { type: 'addProperty'; property: Property; units: Unit[] }
   | { type: 'addUnits'; units: Unit[] }
-  | { type: 'addTenant'; tenant: Tenant; rent: number; payments: Payment[] };
+  | { type: 'addTenant'; tenant: Tenant; rent: number; payments: Payment[] }
+  | { type: 'recordDeparture'; tenantId: string; exitDate: string; settlement: Settlement; addPayments: Payment[]; removePaymentIds: string[] };
 
 export type NewUnit = Pick<Unit, 'label' | 'rent'>;
 
@@ -38,6 +40,16 @@ function reducer(state: State, action: Action): State {
         units: state.units.map((u) => (u.id === action.tenant.unitId ? { ...u, rent: action.rent } : u)),
         payments: [...action.payments, ...state.payments],
       };
+    case 'recordDeparture': {
+      const removed = new Set(action.removePaymentIds);
+      return {
+        ...state,
+        tenants: state.tenants.map((t) =>
+          t.id === action.tenantId ? { ...t, exitDate: action.exitDate, settlement: action.settlement } : t,
+        ),
+        payments: [...action.addPayments, ...state.payments.filter((p) => !removed.has(p.id))],
+      };
+    }
   }
 }
 
@@ -50,6 +62,16 @@ type Store = State & {
   addUnits: (propertyId: string, units: NewUnit[]) => void;
   /** Ajoute un locataire ; l'avance est enregistrée comme loyers payés pour les mois suivants. */
   addTenant: (input: NewTenant) => string;
+  /** Enregistre le départ : solde de tout compte, impayés retenus sur la caution, unité libérée. */
+  recordDeparture: (input: Departure) => Settlement;
+};
+
+export type Departure = {
+  tenantId: string;
+  exitDate: string;
+  deductArrears: boolean;
+  deductions: { label: string; amount: number }[];
+  refundMethod?: PaymentMethod;
 };
 
 export type NewTenant = Omit<Tenant, 'id' | 'advanceMonthsLeft'> & {
@@ -88,16 +110,55 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTenant: ({ rent, advanceMonths, advanceMethod, ...rest }) => {
         const id = newId('t');
         const now = new Date();
+        // L'avance couvre les mois à partir du mois d'entrée
+        const entry = rest.entryDate ? new Date(rest.entryDate) : now;
         const payments: Payment[] = Array.from({ length: advanceMonths }, (_, i) => ({
           id: newId('pay'),
           tenantId: id,
           amount: rent,
           method: advanceMethod,
           date: now.toISOString(),
-          period: periodOf(new Date(now.getFullYear(), now.getMonth() + i, 1)),
+          period: periodOf(new Date(entry.getFullYear(), entry.getMonth() + i, 1)),
         }));
         dispatch({ type: 'addTenant', tenant: { ...rest, id, advanceMonthsLeft: advanceMonths }, rent, payments });
         return id;
+      },
+      recordDeparture: ({ tenantId, exitDate, deductArrears, deductions, refundMethod }) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const rent = state.units.find((u) => u.id === tenant.unitId)!.rent;
+        const { balanceDetail: b, arrearsDeducted, ...rest } = computeSettlement({
+          tenant,
+          rent,
+          payments: state.payments,
+          exitDate,
+          deductArrears,
+          deductions,
+        });
+
+        // Les impayés retenus deviennent des paiements « Retenue sur caution », du plus ancien au plus récent
+        let left = arrearsDeducted;
+        const addPayments: Payment[] = [];
+        for (const a of b.arrearsByPeriod) {
+          if (left <= 0) break;
+          const amount = Math.min(a.amount, left);
+          addPayments.push({ id: newId('pay'), tenantId, amount, method: 'caution', date: exitDate, period: a.period });
+          left -= amount;
+        }
+        const settlement: Settlement = {
+          ...rest,
+          arrearsDeducted,
+          refundMethod: rest.balance > 0 ? refundMethod : undefined,
+        };
+        dispatch({
+          type: 'recordDeparture',
+          tenantId,
+          exitDate,
+          settlement,
+          addPayments,
+          // L'avance des mois après le départ est rendue : ces paiements sont annulés
+          removePaymentIds: b.prepaidPayments.map((p) => p.id),
+        });
+        return settlement;
       },
     }),
     [state, today],
@@ -116,17 +177,31 @@ export function useTenantSummaries(): TenantSummary[] {
   const { tenants, units, properties, payments, today, period } = useStore();
   return useMemo(
     () =>
-      tenants.map((tenant) => {
-        const unit = units.find((l) => l.id === tenant.unitId)!;
-        const property = properties.find((p) => p.id === unit.propertyId)!;
-        const paid = payments
-          .filter((p) => p.tenantId === tenant.id && p.period === period)
-          .reduce((sum, p) => sum + p.amount, 0);
-        const dueDate = new Date(today.getFullYear(), today.getMonth(), tenant.dueDay);
-        const status: TenantSummary['status'] =
-          paid >= unit.rent ? 'paid' : paid > 0 ? 'partial' : today > dueDate ? 'late' : 'upcoming';
-        return { tenant, unit, property, status, paid, due: unit.rent, dueDate: dueDate.toISOString() };
-      }),
+      tenants
+        .filter((tenant) => !tenant.exitDate)
+        .map((tenant) => {
+          const unit = units.find((l) => l.id === tenant.unitId)!;
+          const property = properties.find((p) => p.id === unit.propertyId)!;
+          const paid = payments
+            .filter((p) => p.tenantId === tenant.id && p.period === period)
+            .reduce((sum, p) => sum + p.amount, 0);
+          const entry = tenant.entryDate ? new Date(tenant.entryDate) : undefined;
+          // Entrée dans un mois futur : rien n'est attendu ce mois-ci
+          const notStarted = !!entry && periodOf(entry) > period;
+          let dueDate = new Date(today.getFullYear(), today.getMonth(), tenant.dueDay);
+          if (entry && entry > dueDate) dueDate = entry;
+          const due = notStarted ? 0 : unit.rent;
+          const status: TenantSummary['status'] = notStarted
+            ? 'upcoming'
+            : paid >= due
+              ? 'paid'
+              : paid > 0
+                ? 'partial'
+                : today > dueDate
+                  ? 'late'
+                  : 'upcoming';
+          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString() };
+        }),
     [tenants, units, properties, payments, today, period],
   );
 }
@@ -184,5 +259,21 @@ export function usePropertySummaries(): PropertySummary[] {
         };
       }),
     [properties, units, summaries],
+  );
+}
+
+/** Locataires partis, du départ le plus récent au plus ancien. */
+export function useFormerTenants() {
+  const { tenants, units, properties } = useStore();
+  return useMemo(
+    () =>
+      tenants
+        .filter((t) => t.exitDate)
+        .sort((a, b) => b.exitDate!.localeCompare(a.exitDate!))
+        .map((tenant) => {
+          const unit = units.find((u) => u.id === tenant.unitId)!;
+          return { tenant, unit, property: properties.find((p) => p.id === unit.propertyId)! };
+        }),
+    [tenants, units, properties],
   );
 }

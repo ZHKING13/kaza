@@ -35,7 +35,7 @@ export default function Encaisser() {
   const candidates = useMemo(
     () =>
       summaries
-        .filter((s) => s.status !== 'paid' && (!params.propertyId || s.property.id === params.propertyId))
+        .filter((s) => s.status !== 'paid' && s.due > 0 && (!params.propertyId || s.property.id === params.propertyId))
         .sort((a, b) => (a.status === 'late' ? -1 : 0) - (b.status === 'late' ? -1 : 0)),
     [summaries, params.propertyId],
   );

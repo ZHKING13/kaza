@@ -41,6 +41,7 @@ npm run typecheck
 - **Nouveau bien** : nom, type, quartier et ville, loyer (villa, magasin) ou liste d'unités avec « Dupliquer », photo facultative
 - **Paiements** : historique groupé par mois
 - **Locataires** : recherche et filtres par statut (En retard, Partiel, À venir, Payé)
-- **Nouveau locataire** : unité vacante, import depuis les contacts, indicatif pays, loyer, jour de paiement, avance (enregistrée comme loyers payés) et caution, message de bienvenue WhatsApp
-- **Fiche locataire** : appel, relance WhatsApp, situation du mois, caution, historique
+- **Nouveau locataire** : unité vacante, import depuis les contacts, indicatif pays, loyer, date d'entrée (calendrier), jour de paiement, avance (loyers payés à partir du mois d'entrée) et caution, message de bienvenue WhatsApp
+- **Fiche locataire** : appel, relance WhatsApp, situation du mois, caution, historique, départ
+- **Départ** : date de départ, impayés jusqu'au mois du départ (retenus ou non sur la caution), retenues (réparations, factures…), solde de tout compte à rembourser ou à réclamer, envoi sur WhatsApp ; l'unité redevient vacante et le locataire passe dans « Anciens »
 - **Encaisser** : choix du locataire, montant, mode de paiement, puis quittance WhatsApp
