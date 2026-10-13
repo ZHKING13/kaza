@@ -14,6 +14,8 @@ import { MethodDot } from '@/components/MethodDot';
 import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { useSettlementDoc } from '@/data/documents';
+import { FormError } from '@/components/FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { computeSettlement } from '@/data/ledger';
 import { prorataRules, rentForPeriod } from '@/data/prorata';
@@ -54,6 +56,7 @@ export default function DepartLocataire() {
   const [deductions, setDeductions] = useState<Deduction[]>([]);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>('cash');
   const [done, setDone] = useState<Settlement | null>(null);
+  const [saveError, setSaveError] = useState<string>();
   const settlementDoc = useSettlementDoc(id);
 
   const preview = useMemo(
@@ -135,15 +138,20 @@ export default function DepartLocataire() {
     backgroundColor: c.surface,
   } as const;
 
-  const save = () => {
-    const s = recordDeparture({
-      tenantId: tenant.id,
-      exitDate,
-      deductArrears,
-      deductions: deductions.filter((d) => d.amount > 0).map(({ label, amount }) => ({ label: label.trim() || 'Retenue', amount })),
-      refundMethod,
-    });
-    setDone(s);
+  const save = async () => {
+    setSaveError(undefined);
+    try {
+      const s = await recordDeparture({
+        tenantId: tenant.id,
+        exitDate,
+        deductArrears,
+        deductions: deductions.filter((d) => d.amount > 0).map(({ label, amount }) => ({ label: label.trim() || 'Retenue', amount })),
+        refundMethod,
+      });
+      setDone(s);
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    }
   };
 
   return (
@@ -316,6 +324,7 @@ export default function DepartLocataire() {
         <Text variant="small" tone="muted" style={{ textAlign: 'center' }}>
           {unit.label} redeviendra vacante.
         </Text>
+        <FormError message={saveError} />
         <Button label="Confirmer le départ" icon={Check} haptic onPress={save} />
       </View>
     </KeyboardAvoidingView>

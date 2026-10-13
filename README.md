@@ -4,16 +4,39 @@ Application mobile de gestion locative pour les propriétaires et petites agence
 encaissement des loyers (espèces, Orange Money, MTN MoMo, Wave, Moov), suivi des impayés,
 relances et quittances sur WhatsApp.
 
-> Version 0.1 : application fonctionnelle **sans serveur**. Les données sont enregistrées sur le téléphone
-> (AsyncStorage). La connexion tourne en **mode démo** (`src/lib/auth.ts`) : aucun SMS ni message WhatsApp
-> n'est envoyé, le code s'affiche à l'écran, et Google / Apple renvoient un compte fictif.
-> « Explorer la démo » charge des biens et locataires d'exemple (`src/data/mock.ts`).
+> Deux modes, choisis au build par les variables `EXPO_PUBLIC_API_URL` et `EXPO_PUBLIC_API_KEY` (voir `.env.example`) :
+> - **Serveur Kaza** (dépôt `kaza-api`) : connexion par code WhatsApp ou SMS, données enregistrées sur le compte
+>   et retrouvées sur un autre téléphone ;
+> - **Local** (variables absentes) : données sur le téléphone (AsyncStorage), connexion en mode démo
+>   (le code s'affiche à l'écran, Google / Apple renvoient un compte fictif).
+>
+> « Explorer la démo » charge des biens et locataires d'exemple (`src/data/mock.ts`) dans les deux modes.
 
-## Brancher la vraie connexion
+## Connexion au serveur
 
-`src/lib/auth.ts` définit l'interface `AuthProvider` (`sendOtp`, `verifyOtp`, `signInWithGoogle`, `signInWithApple`).
-Remplacer `demoAuth` par une implémentation reliée au backend (par exemple Supabase : OTP par SMS ou WhatsApp,
-`signInWithIdToken` pour Google et Apple). Les écrans n'ont pas à changer.
+```bash
+cp .env.example .env      # adresse de l'API et clé de l'application
+npx expo start --clear    # --clear à chaque changement de .env
+```
+
+| Fichier | Rôle |
+|---|---|
+| `src/lib/config.ts` | Lit l'adresse et la clé ; `isApiConfigured` choisit le mode |
+| `src/lib/api.ts` | Client HTTP : clé `x-api-key`, jeton d'accès, renouvellement automatique (un seul à la fois), messages d'erreur du serveur |
+| `src/lib/tokens.ts` | Jeton de rafraîchissement dans le stockage sécurisé du téléphone (`expo-secure-store`), jeton d'accès en mémoire |
+| `src/lib/auth.ts` | `apiAuth` (code par WhatsApp / SMS) ou `demoAuth` |
+| `src/data/remote.ts` | Appels de l'API et conversion du « snapshot » du serveur vers le modèle de l'application |
+| `src/data/store.tsx` | Cache local : relu au démarrage, puis mis à jour depuis le serveur ; chaque écriture passe d'abord par le serveur |
+
+Fonctionnement en mode serveur :
+- **Démarrage** : l'application s'ouvre sur les données du téléphone, puis se met à jour depuis le serveur (lecture hors ligne possible).
+- **Écritures** (bien, unités, locataire, encaissement, profil, règle de prorata) : envoyées au serveur avec `Idempotency-Key`
+  pour les locataires et les encaissements ; le téléphone n'est modifié qu'une fois l'écriture acceptée. Sans réseau,
+  l'écran affiche « Pas de connexion » et rien n'est perdu de ce qui est déjà enregistré.
+- **Montants** : l'avance d'un nouveau locataire est calculée par le serveur (règle de prorata de l'espace).
+- **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
+- **Pas encore** en mode serveur : départ d'un locataire et solde (le serveur arrive à l'étape 4), photos des biens
+  (gardées sur le téléphone), connexion Google / Apple (boutons masqués), écritures hors ligne mises en file d'attente.
 
 ## Lancer l'application
 

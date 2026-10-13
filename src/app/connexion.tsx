@@ -10,6 +10,7 @@ import { PhoneField } from '@/components/PhoneField';
 import { Text } from '@/components/Text';
 import { countries, type Country } from '@/data/countries';
 import { useStore } from '@/data/store';
+import { ApiError } from '@/lib/api';
 import { auth, type OtpChannel, type SocialIdentity } from '@/lib/auth';
 import { fonts, radius, space, useTheme } from '@/theme';
 
@@ -81,8 +82,9 @@ export default function Connexion() {
       const phone = `+${country.dial}${digits}`;
       const req = await auth.sendOtp(phone, channel);
       router.push({ pathname: '/verification', params: { phone, channel, demoCode: req.demoCode ?? '' } });
-    } catch {
-      setError('Le code n’a pas pu être envoyé. Vérifiez votre connexion et réessayez.');
+    } catch (e) {
+      // Message du serveur (numéro invalide, trop de demandes…) ou absence de réseau
+      setError(e instanceof ApiError ? e.message : 'Le code n’a pas pu être envoyé. Vérifiez votre connexion et réessayez.');
     } finally {
       setBusy(null);
     }
@@ -152,32 +154,36 @@ export default function Connexion() {
           </Pressable>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-          <Text variant="small" tone="muted">
-            ou
-          </Text>
-          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-        </View>
+        {auth.socialAvailable ? (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+              <Text variant="small" tone="muted">
+                ou
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+            </View>
 
-        <View style={{ gap: space.sm }}>
-          <SocialButton
-            label={busy === 'google' ? 'Connexion…' : 'Continuer avec Google'}
-            logo={<GoogleLogo />}
-            disabled={!!busy}
-            onPress={() => social('google')}
-          />
-          {/* Apple impose son bouton sur iOS dès qu'une connexion tierce (Google) est proposée ; inutile ailleurs */}
-          {Platform.OS === 'ios' ? (
-            <SocialButton
-              label={busy === 'apple' ? 'Connexion…' : 'Continuer avec Apple'}
-              logo={<AppleLogo color={scheme === 'dark' ? '#000000' : '#FFFFFF'} size={18} />}
-              dark
-              disabled={!!busy}
-              onPress={() => social('apple')}
-            />
-          ) : null}
-        </View>
+            <View style={{ gap: space.sm }}>
+              <SocialButton
+                label={busy === 'google' ? 'Connexion…' : 'Continuer avec Google'}
+                logo={<GoogleLogo />}
+                disabled={!!busy}
+                onPress={() => social('google')}
+              />
+              {/* Apple impose son bouton sur iOS dès qu'une connexion tierce (Google) est proposée ; inutile ailleurs */}
+              {Platform.OS === 'ios' ? (
+                <SocialButton
+                  label={busy === 'apple' ? 'Connexion…' : 'Continuer avec Apple'}
+                  logo={<AppleLogo color={scheme === 'dark' ? '#000000' : '#FFFFFF'} size={18} />}
+                  dark
+                  disabled={!!busy}
+                  onPress={() => social('apple')}
+                />
+              ) : null}
+            </View>
+          </>
+        ) : null}
 
         <Text variant="caption" tone="muted" style={{ textAlign: 'center' }}>
           En continuant, vous acceptez les conditions d’utilisation et la politique de confidentialité de Kaza.

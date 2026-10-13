@@ -1,8 +1,11 @@
 import { Stack } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { PropertyForm } from '@/components/PropertyForm';
 import { StepHeader } from '@/components/StepHeader';
+import { FormError } from '@/components/FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { useStore } from '@/data/store';
 import { fonts, space, useTheme } from '@/theme';
@@ -10,6 +13,11 @@ import { fonts, space, useTheme } from '@/theme';
 export default function OnboardingPremierBien() {
   const { c } = useTheme();
   const { completeOnboarding } = useStore();
+  const [laterError, setLaterError] = useState<string>();
+  const later = () => {
+    setLaterError(undefined);
+    completeOnboarding().catch((e) => setLaterError(errorMessage(e)));
+  };
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen
@@ -18,7 +26,7 @@ export default function OnboardingPremierBien() {
           headerRight: () => (
             <Pressable
               accessibilityRole="button"
-              onPress={completeOnboarding}
+              onPress={later}
               hitSlop={8}
               style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.sm }}>
               <Text variant="body" tone="primary" style={{ fontFamily: fonts.medium }}>
@@ -35,6 +43,7 @@ export default function OnboardingPremierBien() {
           title="Votre premier bien"
           body="Une cour, une villa, un immeuble… Vous ajouterez les locataires ensuite."
         />
+        <FormError message={laterError} />
       </View>
       <PropertyForm compact submitLabel="Enregistrer et commencer" onSaved={completeOnboarding} />
     </View>

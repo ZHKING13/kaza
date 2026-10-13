@@ -10,6 +10,8 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { MethodDot } from '@/components/MethodDot';
 import { StatusBadge } from '@/components/StatusBadge';
+import { FormError } from '@/components/FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { methodOrder, methods } from '@/data/methods';
 import { useStore, useTenantSummaries } from '@/data/store';
@@ -47,6 +49,8 @@ export default function Encaisser() {
   const [amountText, setAmountText] = useState(remaining ? String(remaining) : '');
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [done, setDone] = useState<{ amount: number; paymentId: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
 
   const amount = Number(amountText.replace(/\D/g, '')) || 0;
 
@@ -56,10 +60,18 @@ export default function Encaisser() {
     if (s) setAmountText(String(Math.max(s.due - s.paid, 0) || s.due));
   };
 
-  const save = () => {
-    if (!selected || amount <= 0) return;
-    const paymentId = addPayment({ tenantId: selected.tenant.id, amount, method, date: new Date().toISOString(), period });
-    setDone({ amount, paymentId });
+  const save = async () => {
+    if (!selected || amount <= 0 || saving) return;
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      const paymentId = await addPayment({ tenantId: selected.tenant.id, amount, method, date: new Date().toISOString(), period });
+      setDone({ amount, paymentId });
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (done && selected) {
@@ -242,12 +254,13 @@ export default function Encaisser() {
         </View>
 
         <Button
-          label={amount > 0 ? `Enregistrer ${formatAmount(amount)}` : 'Saisissez un montant'}
+          label={saving ? 'Enregistrement…' : amount > 0 ? `Enregistrer ${formatAmount(amount)}` : 'Saisissez un montant'}
           icon={Check}
           haptic
-          disabled={!selected || amount <= 0}
+          disabled={!selected || amount <= 0 || saving}
           onPress={save}
         />
+        <FormError message={saveError} />
         {selected && amount > 0 && amount < remaining ? (
           <Text variant="small" color={status.partial.fg} style={{ textAlign: 'center' }}>
             Paiement partiel : il restera {formatAmount(remaining - amount)} à payer.

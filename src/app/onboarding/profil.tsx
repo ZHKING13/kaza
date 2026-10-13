@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { StepHeader } from '@/components/StepHeader';
 import { PhoneField } from '@/components/PhoneField';
+import { FormError } from '@/components/FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { countries, splitPhone } from '@/data/countries';
@@ -24,6 +26,8 @@ export default function OnboardingProfil() {
   const [country, setCountry] = useState(initial.country);
   const [national, setNational] = useState(initial.national);
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
 
   // Connexion par téléphone : numéro déjà vérifié, pas besoin de le redemander
   const phoneKnown = session?.provider === 'phone' && !!profile.phone;
@@ -36,15 +40,23 @@ export default function OnboardingProfil() {
   const valid = Object.values(errors).every((e) => !e);
   const show = (e?: string) => (submitted ? e : undefined);
 
-  const next = () => {
+  const next = async () => {
     setSubmitted(true);
-    if (!valid) return;
-    setProfile({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phone: phoneKnown ? profile.phone : `+${country.dial}${digits}`,
-    });
-    router.push('/onboarding/premier-bien');
+    if (!valid || saving) return;
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      await setProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phoneKnown ? profile.phone : `+${country.dial}${digits}`,
+      });
+      router.push('/onboarding/premier-bien');
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -127,7 +139,8 @@ export default function OnboardingProfil() {
           borderTopWidth: 1,
           borderTopColor: c.border,
         }}>
-        <Button label="Continuer" icon={ArrowRight} onPress={next} />
+        <FormError message={saveError} />
+        <Button label={saving ? 'Enregistrement…' : 'Continuer'} icon={ArrowRight} onPress={next} disabled={saving} />
       </View>
     </KeyboardAvoidingView>
   );

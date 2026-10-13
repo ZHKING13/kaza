@@ -101,12 +101,18 @@ calculé par `periodRentStatus` de `@zhking13/kaza-domain` 0.2.0 : en retard **l
 
 Erreurs : `unitNotVacant` (409), `unitNotFound`, `notFound` (404), `tenantPhoneInvalid` (422).
 
+## Synchronisation — **implémentée**
+
+| Méthode | Route | Réponse `data` | Usage |
+|---|---|---|---|
+| GET | `…/snapshot` | `{ organization, properties: [{ …, units }], leases, payments, syncedAt }` | Démarrage de l'application : cache local complet (paiements non annulés) |
+
 ## Paiements
 
 | Méthode | Route | Corps / paramètres | Réponse | Écran |
 |---|---|---|---|---|
-| GET | `…/payments` | `?period=2026-10&leaseId=&cursor=` | `{ items: [Payment], nextCursor }` | Paiements, historique |
-| POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt }` + `Idempotency-Key` | `Payment` | Encaisser |
+| GET | `…/payments` | `?period=2026-10&leaseId=&cursor=` | `{ items: [Payment], nextCursor }` | Paiements, historique (étape 4 ; le snapshot suffit pour l'instant) |
+| POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt? }` + `Idempotency-Key` | `Payment` — **implémenté** (owner, manager, collector ; `periodBeforeEntry`, `periodAfterExit`) | Encaisser |
 | POST | `…/payments/:id/void` | `{ reason }` | `Payment` | (à venir) annuler une saisie |
 | GET | `…/payments/:id/receipt` | — | `ReceiptData` (quittance ou reçu partiel) | Quittance |
 

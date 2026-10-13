@@ -5,6 +5,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { FormError } from '@/components/FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { draftKey, type UnitDraft, UnitsEditor } from '@/components/UnitsEditor';
 import { useStore } from '@/data/store';
@@ -25,13 +27,23 @@ export default function AjouterUnites() {
     { key: draftKey(), label: last ? nextUnitLabel(last.label) : '', rent: last?.rent ?? 0 },
   ]);
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
   const invalid = units.some((u) => !u.label.trim() || u.rent <= 0);
 
-  const save = () => {
+  const save = async () => {
     setSubmitted(true);
-    if (invalid || !property) return;
-    addUnits(property.id, units);
-    router.back();
+    if (invalid || !property || saving) return;
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      await addUnits(property.id, units);
+      router.back();
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -62,7 +74,13 @@ export default function AjouterUnites() {
           borderTopWidth: 1,
           borderTopColor: c.border,
         }}>
-        <Button label={`Ajouter ${units.length} unité${units.length > 1 ? 's' : ''}`} icon={Check} onPress={save} />
+        <FormError message={saveError} />
+        <Button
+          label={saving ? 'Enregistrement…' : `Ajouter ${units.length} unité${units.length > 1 ? 's' : ''}`}
+          icon={Check}
+          onPress={save}
+          disabled={saving}
+        />
       </View>
     </KeyboardAvoidingView>
   );

@@ -5,6 +5,7 @@ import { Pressable, TextInput, View } from 'react-native';
 import { DemoBanner } from '@/components/DemoBanner';
 import { Text } from '@/components/Text';
 import { useStore } from '@/data/store';
+import { errorMessage } from '@/lib/api';
 import { auth, type OtpChannel } from '@/lib/auth';
 import { formatPhone } from '@/lib/format';
 import { fonts, radius, space, useTheme } from '@/theme';
@@ -14,7 +15,7 @@ const LENGTH = 6;
 export default function Verification() {
   const { c, status } = useTheme();
   const params = useLocalSearchParams<{ phone: string; channel: OtpChannel; demoCode?: string }>();
-  const { signIn } = useStore();
+  const { signIn, setRemoteAccount } = useStore();
   const [code, setCode] = useState('');
   const [demoCode, setDemoCode] = useState(params.demoCode);
   const [error, setError] = useState<string>();
@@ -31,23 +32,35 @@ export default function Verification() {
   const verify = async (value: string) => {
     setChecking(true);
     setError(undefined);
-    const ok = await auth.verifyOtp(params.phone, value);
-    setChecking(false);
-    if (ok) {
+    try {
+      const result = await auth.verifyOtp(params.phone, value);
+      if (!result.ok) {
+        setError(result.message);
+        setCode('');
+        input.current?.focus();
+        return;
+      }
+      // Compte du serveur : profil et espace relus avant d'ouvrir l'application
+      if (result.user) await setRemoteAccount(result.user);
       signIn({ provider: 'phone', phone: params.phone }, { phone: params.phone });
-    } else {
-      setError('Code incorrect. Vérifiez les 6 chiffres et réessayez.');
+    } catch (e) {
+      setError(errorMessage(e));
       setCode('');
-      input.current?.focus();
+    } finally {
+      setChecking(false);
     }
   };
 
   const resend = async () => {
-    const req = await auth.sendOtp(params.phone, params.channel);
-    setDemoCode(req.demoCode);
-    setResendIn(req.resendIn);
-    setCode('');
-    setError(undefined);
+    try {
+      const req = await auth.sendOtp(params.phone, params.channel);
+      setDemoCode(req.demoCode);
+      setResendIn(req.resendIn);
+      setCode('');
+      setError(undefined);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   };
 
   const via = params.channel === 'whatsapp' ? 'WhatsApp' : 'SMS';

@@ -120,11 +120,14 @@ conditions d'utilisation versionnées, feature flags, import/export, géolocalis
 
 ## 7. Brancher l'application
 
-L'application est prête côté interfaces :
+**Fait** (voir le README de l'application, « Connexion au serveur ») :
 
-- `src/lib/auth.ts` : remplacer `demoAuth` par un `AuthProvider` qui appelle `/v1/auth/*` (les écrans ne changent pas).
-- `src/data/store.tsx` : aujourd'hui source de vérité locale (AsyncStorage). Passer à un cache local + file d'envoi :
-  lecture depuis l'API, écritures envoyées avec `Idempotency-Key`, rejouées au retour du réseau.
+- `src/lib/auth.ts` : `apiAuth` appelle `/api/v1/public/auth/*` ; les écrans de connexion n'ont presque pas changé.
+- `src/data/store.tsx` : cache local relu au démarrage puis remplacé par `GET …/snapshot` ; écritures envoyées au serveur
+  (avec `Idempotency-Key` pour les locataires et les encaissements) avant de modifier le téléphone.
+
+Reste : file d'envoi hors ligne (écritures rejouées au retour du réseau), départ et solde côté serveur, photos (stockage objet),
+connexion Google / Apple dans l'application.
 
 ## 8. Plan de livraison
 

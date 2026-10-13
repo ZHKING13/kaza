@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from './Button';
 import { Chip } from './Chip';
+import { FormError } from './FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from './Text';
 import { TextField } from './TextField';
 import { draftKey, type UnitDraft, UnitsEditor } from './UnitsEditor';
@@ -38,7 +40,7 @@ export function PropertyForm({
   submitLabel = 'Enregistrer le bien',
   compact = false,
 }: {
-  onSaved: (propertyId: string) => void;
+  onSaved: (propertyId: string) => void | Promise<void>;
   submitLabel?: string;
   /** Onboarding : sans photo ni description, à compléter plus tard */
   compact?: boolean;
@@ -59,6 +61,8 @@ export function PropertyForm({
   const [photo, setPhoto] = useState<string | undefined>();
   const [description, setDescription] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
 
   const single = type ? propertyTypes[type].singleUnit : false;
 
@@ -92,21 +96,29 @@ export function PropertyForm({
   const valid = Object.values(errors).every((e) => !e);
   const show = (e?: string) => (submitted ? e : undefined);
 
-  const save = () => {
+  const save = async () => {
     setSubmitted(true);
-    if (!valid || !type) return;
-    const id = addProperty(
-      {
-        name: name.trim(),
-        type,
-        district: district.trim(),
-        city: city.trim(),
-        photo,
-        description: description.trim() || undefined,
-      },
-      single ? [{ label: propertyTypes[type].defaultUnit, rent }] : units.map((u) => ({ label: u.label, rent: u.rent })),
-    );
-    onSaved(id);
+    if (!valid || !type || saving) return;
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      const id = await addProperty(
+        {
+          name: name.trim(),
+          type,
+          district: district.trim(),
+          city: city.trim(),
+          photo,
+          description: description.trim() || undefined,
+        },
+        single ? [{ label: propertyTypes[type].defaultUnit, rent }] : units.map((u) => ({ label: u.label, rent: u.rent })),
+      );
+      await onSaved(id);
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -288,7 +300,8 @@ export function PropertyForm({
             Complétez les champs signalés en rouge.
           </Text>
         ) : null}
-        <Button label={submitLabel} icon={Check} haptic onPress={save} />
+        <FormError message={saveError} />
+        <Button label={saving ? 'Enregistrement…' : submitLabel} icon={Check} haptic onPress={save} disabled={saving} />
       </View>
     </KeyboardAvoidingView>
   );

@@ -1,9 +1,12 @@
 import { Stack } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
 import { type ProrataRule, prorataRules, rentForPeriod } from '@/data/prorata';
 import { useStore } from '@/data/store';
+import { errorMessage } from '@/lib/api';
 import { formatAmount, formatPeriod, periodOf } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
@@ -11,7 +14,12 @@ const ORDER: ProrataRule[] = ['full', 'daily', 'half'];
 
 export default function Parametres() {
   const { c } = useTheme();
-  const { settings, setSettings, today } = useStore();
+  const { settings, setSettings, today, remote, syncedAt } = useStore();
+  const [error, setError] = useState<string>();
+  const choose = (prorata: ProrataRule) => {
+    setError(undefined);
+    setSettings({ prorata }).catch((e) => setError(errorMessage(e)));
+  };
   // Exemple concret : entrée le 20 du mois en cours, loyer de 120 000
   const period = periodOf(today);
   const entry = new Date(today.getFullYear(), today.getMonth(), 20, 12).toISOString();
@@ -38,7 +46,7 @@ export default function Parametres() {
               key={r}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
-              onPress={() => setSettings({ prorata: r })}
+              onPress={() => choose(r)}
               style={{
                 flexDirection: 'row',
                 gap: space.sm,
@@ -76,14 +84,18 @@ export default function Parametres() {
           );
         })}
       </View>
+      <FormError message={error} />
 
       <View style={{ gap: 4, marginTop: space.md }}>
         <Text variant="h3" accessibilityRole="header">
           Données
         </Text>
         <Text variant="small" tone="muted">
-          Vos biens, locataires et paiements sont enregistrés sur ce téléphone. Tant que la synchronisation n’est pas activée, ils
-          ne sont pas récupérables sur un autre appareil.
+          {remote
+            ? `Vos biens, locataires et paiements sont enregistrés sur votre compte Kaza : vous les retrouvez en vous connectant sur un autre téléphone.${
+                syncedAt ? ` Dernière mise à jour : ${new Date(syncedAt).toLocaleString('fr-FR')}.` : ''
+              }`
+            : 'Vos biens, locataires et paiements sont enregistrés sur ce téléphone. Tant que la synchronisation n’est pas activée, ils ne sont pas récupérables sur un autre appareil.'}
         </Text>
       </View>
     </ScrollView>

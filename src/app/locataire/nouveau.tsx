@@ -13,6 +13,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
 import { Stepper } from '@/components/Stepper';
 import { PhoneField } from '@/components/PhoneField';
+import { FormError } from '@/components/FormError';
+import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { countries, type Country, splitPhone } from '@/data/countries';
@@ -97,6 +99,8 @@ export default function NouveauLocataire() {
   const [submitted, setSubmitted] = useState(false);
   const [contactError, setContactError] = useState<string>();
   const [createdId, setCreatedId] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
 
   const chooseUnit = (id: string) => {
     setUnitId(id);
@@ -140,22 +144,30 @@ export default function NouveauLocataire() {
   const valid = Object.values(errors).every((e) => !e);
   const show = (e?: string) => (submitted ? e : undefined);
 
-  const save = () => {
+  const save = async () => {
     setSubmitted(true);
-    if (!valid || !unit) return;
-    const id = addTenant({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phone: `+${country.dial}${digits}`,
-      unitId: unit.id,
-      dueDay,
-      depositMonths: deposit,
-      entryDate,
-      rent,
-      advanceMonths: advance,
-      advanceMethod,
-    });
-    setCreatedId(id);
+    if (!valid || !unit || saving) return;
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      const id = await addTenant({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: `+${country.dial}${digits}`,
+        unitId: unit.id,
+        dueDay,
+        depositMonths: deposit,
+        entryDate,
+        rent,
+        advanceMonths: advance,
+        advanceMethod,
+      });
+      setCreatedId(id);
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (createdId && unit && property) {
@@ -486,7 +498,14 @@ export default function NouveauLocataire() {
             Complétez les champs signalés en rouge.
           </Text>
         ) : null}
-        <Button label="Ajouter le locataire" icon={Check} haptic onPress={save} disabled={vacant.length === 0 && !unit} />
+        <FormError message={saveError} />
+        <Button
+          label={saving ? 'Enregistrement…' : 'Ajouter le locataire'}
+          icon={Check}
+          haptic
+          onPress={save}
+          disabled={(vacant.length === 0 && !unit) || saving}
+        />
       </View>
     </KeyboardAvoidingView>
   );
