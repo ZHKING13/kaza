@@ -50,6 +50,11 @@ Fonctionnement en mode serveur :
   impayés réglés par la caution, avance des mois suivants annulée.
 - **Annuler un paiement** : depuis la quittance (« Annuler ce paiement », avec un motif), pour le propriétaire et le
   gérant. Impossible pour un locataire parti ou une retenue sur caution.
+- **Envoi du code** : une preuve que la demande vient de la vraie application est jointe (Play Integrity sur Android,
+  App Attest sur iOS, `src/lib/integrity.ts`). Le serveur l'exige ou non selon son mode ; sur le web, ou sur un
+  appareil qui ne sait pas en produire (simulateur iOS, Android sans Google Play), la demande part sans.
+  Android : renseigner `EXPO_PUBLIC_GOOGLE_CLOUD_PROJECT_NUMBER`. iOS : capacité App Attest déclarée dans `app.json`.
+  La clé `x-api-key` identifie l'application auprès du serveur mais n'est pas un secret.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
   masqués), quittance produite par le serveur.

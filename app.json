@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "africa.kaza.app"
+      "bundleIdentifier": "africa.kaza.app",
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "production"
+      }
     },
     "android": {
       "package": "africa.kaza.app",

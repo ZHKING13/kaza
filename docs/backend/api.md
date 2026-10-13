@@ -17,7 +17,8 @@ Erreurs : `{ "statusCode": 5xxxx, "statusCodeKey": "otpInvalid", "module": "auth
 
 | Méthode | Route | Corps | Réponse `data` | Écran |
 |---|---|---|---|---|
-| POST | `/public/auth/otp/send` | `{ phone: "+2250712345678", channel?: "whatsapp" \| "sms" }` | `{ channel, resendInSeconds: 30, expiresInSeconds: 300 }` | Connexion |
+| POST | `/public/app-integrity/challenge` | — | `{ challenge, expiresInSeconds: 300 }` | Connexion (avant l'envoi du code) |
+| POST | `/public/auth/otp/send` | `{ phone: "+2250712345678", channel?: "whatsapp" \| "sms", integrity?: Proof }` | `{ channel, resendInSeconds: 30, expiresInSeconds: 300 }` | Connexion |
 | POST | `/public/auth/otp/verify` | `{ phone, code, device?: { name?, platform?: "ios" \| "android" \| "web" } }` | `Login` | Code |
 | POST | `/public/auth/social/google` | `{ device? }` + `Authorization: Bearer <id token Google>` | `Login` | Connexion |
 | POST | `/public/auth/social/apple` | `{ firstName?, lastName?, device? }` + `Authorization: Bearer <identity token Apple>` | `Login` | Connexion (iOS) |
@@ -32,6 +33,18 @@ Erreurs : `{ "statusCode": 5xxxx, "statusCodeKey": "otpInvalid", "module": "auth
 - Après un rafraîchissement, l'ancien jeton d'accès est refusé : rejouer la requête avec le nouveau.
 - La session expire après 30 jours **sans utilisation** (chaque rafraîchissement la prolonge).
 - Code : 30 s entre deux envois, 3 codes par numéro / 10 min, 10 par IP / heure, 5 essais puis blocage 15 min.
+
+**Intégrité de l'application.** `x-api-key` identifie l'application mais n'est pas secret. L'envoi d'un code coûtant
+un message, le serveur peut exiger une preuve que la demande vient de la vraie application (`APP_INTEGRITY_MODE` :
+`off`, `report`, `enforce`). Elle est liée à la chaîne `otp-send:<challenge>:<phone>` :
+- Android : `Proof = { platform: "android", challenge, token }`, jeton Play Integrity (requête standard) dont le
+  `requestHash` est le SHA-256 hexadécimal de la chaîne ;
+- iOS : `Proof = { platform: "ios", challenge, keyId, attestation }` à la première utilisation d'une clé App Attest,
+  puis `{ platform: "ios", challenge, keyId, assertion }`.
+
+L'application fait tout cela dans `src/lib/integrity.ts` ; sur le web, ou si la plateforme ne sait pas produire de
+preuve, la demande part sans. Erreurs (403) : `integrityRequired`, `integrityInvalid`, `integrityKeyUnknown` (clé
+inconnue : l'application en atteste une nouvelle et réessaie une fois).
 
 Codes d'erreur (`statusCodeKey`) : `otpInvalid` (avec `data.remainingAttempts`), `otpExpired`, `otpTooManyAttempts` et
 `otpRateLimited` (avec `data.retryAfterSeconds`), `phoneInvalid`, `socialGoogleInvalid`, `socialAppleInvalid`,

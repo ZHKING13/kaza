@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import { ApiError, api, saveTokens, type Tokens } from './api';
 import { isApiConfigured } from './config';
+import { integrityOutcome, prepareProof } from './integrity';
 import { tokens } from './tokens';
 import type { ApiUser } from '@/data/remote';
 
@@ -78,12 +79,25 @@ export const apiAuth: AuthProvider = {
   isDemo: false,
   socialAvailable: false,
   async sendOtp(phone, channel) {
-    const res = await api.post<{ channel: OtpChannel; resendInSeconds: number }>(
-      '/public/auth/otp/send',
-      { phone, channel },
-      { auth: false },
-    );
-    return { phone, channel, resendIn: res.resendInSeconds };
+    // Preuve d'intégrité jointe quand la plateforme sait en produire (voir lib/integrity.ts).
+    // Clé App Attest inconnue du serveur (application réinstallée, base vidée) : une nouvelle clé, un essai de plus.
+    for (let attempt = 0; ; attempt++) {
+      const proof = await prepareProof('otp-send', phone);
+      try {
+        const res = await api.post<{ channel: OtpChannel; resendInSeconds: number }>(
+          '/public/auth/otp/send',
+          { phone, channel, ...(proof ? { integrity: proof.body } : {}) },
+          { auth: false },
+        );
+        await proof?.settle('accepted');
+        return { phone, channel, resendIn: res.resendInSeconds };
+      } catch (error) {
+        const outcome = integrityOutcome(error);
+        await proof?.settle(outcome);
+        if (outcome === 'keyUnknown' && attempt === 0) continue;
+        throw error;
+      }
+    }
   },
   async verifyOtp(phone, code) {
     try {

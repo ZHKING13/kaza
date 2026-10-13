@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { MessageCircle, MessageSquare } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { AppleLogo, GoogleLogo } from '@/components/BrandLogos';
@@ -12,6 +12,7 @@ import { countries, type Country } from '@/data/countries';
 import { useStore } from '@/data/store';
 import { ApiError } from '@/lib/api';
 import { auth, type OtpChannel, type SocialIdentity } from '@/lib/auth';
+import { prepareIntegrity } from '@/lib/integrity';
 import { fonts, radius, space, useTheme } from '@/theme';
 
 function SocialButton({
@@ -63,6 +64,11 @@ export default function Connexion() {
   const [national, setNational] = useState('');
   const [busy, setBusy] = useState<OtpChannel | 'google' | 'apple' | null>(null);
   const [error, setError] = useState<string>();
+
+  // Le premier jeton Play Integrity est lent : on prépare le fournisseur pendant la saisie du numéro.
+  useEffect(() => {
+    if (!auth.isDemo) prepareIntegrity().catch(() => {});
+  }, []);
 
   const digits = national.replace(/\D/g, '');
   const phoneOk = digits.length === country.length;
