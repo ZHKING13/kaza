@@ -1,37 +1,37 @@
 import { periodOf } from '@/lib/format';
 
-import type { Lot, Payment, PaymentMethod, Property, Tenant } from './types';
+import type { Unit, Payment, PaymentMethod, Property, Tenant } from './types';
 
-/** Données d'exemple : 3 biens à Abidjan, 19 lots, 17 locataires. */
+/** Données d'exemple : 3 biens à Abidjan, 19 unités, 17 locataires. */
 
 export const properties: Property[] = [
-  { id: 'p1', name: 'Résidence Les Palmiers', district: 'Cocody Angré', city: 'Abidjan' },
-  { id: 'p2', name: 'Cour commune Yopougon', district: 'Yopougon Selmer', city: 'Abidjan' },
-  { id: 'p3', name: 'Immeuble Marcory', district: 'Marcory Zone 4', city: 'Abidjan' },
+  { id: 'p1', name: 'Résidence Les Palmiers', type: 'immeuble', district: 'Cocody Angré', city: 'Abidjan' },
+  { id: 'p2', name: 'Cour commune Yopougon', type: 'cour', district: 'Yopougon Selmer', city: 'Abidjan' },
+  { id: 'p3', name: 'Immeuble Marcory', type: 'immeuble', district: 'Marcory Zone 4', city: 'Abidjan' },
 ];
 
-const lot = (id: string, propertyId: string, label: string, rent: number): Lot => ({ id, propertyId, label, rent });
+const unit = (id: string, propertyId: string, label: string, rent: number): Unit => ({ id, propertyId, label, rent });
 
-export const lots: Lot[] = [
-  lot('l1', 'p1', 'A1', 150000),
-  lot('l2', 'p1', 'A2', 150000),
-  lot('l3', 'p1', 'B1', 120000),
-  lot('l4', 'p1', 'B2', 85000),
-  lot('l5', 'p1', 'C4', 120000),
-  lot('l6', 'p1', 'C5', 120000),
-  lot('l7', 'p2', 'Chambre 1', 35000),
-  lot('l8', 'p2', 'Chambre 2', 35000),
-  lot('l9', 'p2', 'Chambre 3', 40000),
-  lot('l10', 'p2', 'Chambre 4', 40000),
-  lot('l11', 'p2', 'Chambre 5', 35000),
-  lot('l12', 'p2', 'Studio 6', 60000),
-  lot('l13', 'p2', 'Studio 7', 60000),
-  lot('l14', 'p3', 'Appt 1', 180000),
-  lot('l15', 'p3', 'Appt 2', 180000),
-  lot('l16', 'p3', 'Appt 3', 200000),
-  lot('l17', 'p3', 'Appt 4', 200000),
-  lot('l18', 'p3', 'Magasin', 100000),
-  lot('l19', 'p3', 'Appt 5', 180000),
+export const units: Unit[] = [
+  unit('l1', 'p1', 'A1', 150000),
+  unit('l2', 'p1', 'A2', 150000),
+  unit('l3', 'p1', 'B1', 120000),
+  unit('l4', 'p1', 'B2', 85000),
+  unit('l5', 'p1', 'C4', 120000),
+  unit('l6', 'p1', 'C5', 120000),
+  unit('l7', 'p2', 'Chambre 1', 35000),
+  unit('l8', 'p2', 'Chambre 2', 35000),
+  unit('l9', 'p2', 'Chambre 3', 40000),
+  unit('l10', 'p2', 'Chambre 4', 40000),
+  unit('l11', 'p2', 'Chambre 5', 35000),
+  unit('l12', 'p2', 'Studio 6', 60000),
+  unit('l13', 'p2', 'Studio 7', 60000),
+  unit('l14', 'p3', 'Appt 1', 180000),
+  unit('l15', 'p3', 'Appt 2', 180000),
+  unit('l16', 'p3', 'Appt 3', 200000),
+  unit('l17', 'p3', 'Appt 4', 200000),
+  unit('l18', 'p3', 'Magasin', 100000),
+  unit('l19', 'p3', 'Appt 5', 180000),
 ];
 
 const t = (
@@ -39,12 +39,12 @@ const t = (
   firstName: string,
   lastName: string,
   phone: string,
-  lotId: string,
+  unitId: string,
   dueDay = 5,
   advanceMonthsLeft = 0,
-): Tenant => ({ id, firstName, lastName, phone, lotId, dueDay, advanceMonthsLeft });
+): Tenant => ({ id, firstName, lastName, phone, unitId, dueDay, advanceMonthsLeft });
 
-// Lots l12 et l19 sont vacants.
+// Les unités l12 et l19 sont vacantes.
 export const tenants: Tenant[] = [
   t('t1', 'Awa', 'Koné', '+2250712345678', 'l4', 5, 2),
   t('t2', 'Yao', 'Touré', '+2250501020304', 'l1'),
@@ -74,7 +74,7 @@ export function buildPayments(today: Date): Payment[] {
   const out: Payment[] = [];
   const rentOf = (tenantId: string) => {
     const tenant = tenants.find((x) => x.id === tenantId)!;
-    return lots.find((l) => l.id === tenant.lotId)!.rent;
+    return units.find((l) => l.id === tenant.unitId)!.rent;
   };
   const add = (tenantId: string, monthOffset: number, d: number, method: PaymentMethod, ratio = 1) => {
     const date = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);

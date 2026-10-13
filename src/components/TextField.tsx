@@ -1,0 +1,72 @@
+import type { LucideIcon } from 'lucide-react-native';
+import { TextInput, type TextInputProps, View } from 'react-native';
+
+import { fonts, radius, space, useTheme } from '@/theme';
+
+import { Text } from './Text';
+
+type Props = TextInputProps & {
+  label: string;
+  helper?: string;
+  error?: string;
+  icon?: LucideIcon;
+  /** Texte fixe à droite du champ, ex. « FCFA » */
+  suffix?: string;
+};
+
+/** Champ avec libellé toujours visible au-dessus, aide ou erreur en dessous. */
+export function TextField({ label, helper, error, icon: Icon, suffix, multiline, style, ...rest }: Props) {
+  const { c, status } = useTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      <Text variant="label" tone="text" style={{ fontFamily: fonts.semibold, fontSize: 14 }}>
+        {label}
+      </Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: multiline ? 'flex-start' : 'center',
+          gap: space.xs,
+          minHeight: multiline ? 96 : 48,
+          paddingHorizontal: space.sm,
+          borderRadius: radius.sm,
+          borderWidth: 1,
+          borderColor: error ? status.late.fg : c.border,
+          backgroundColor: c.surface,
+        }}>
+        {Icon ? <Icon size={20} color={c.textMuted} style={{ marginTop: multiline ? space.sm : 0 }} /> : null}
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor={c.textMuted}
+          multiline={multiline}
+          style={[
+            {
+              flex: 1,
+              fontFamily: fonts.regular,
+              fontSize: 16,
+              color: c.text,
+              paddingVertical: space.sm,
+              textAlignVertical: multiline ? 'top' : 'center',
+            },
+            style,
+          ]}
+          {...rest}
+        />
+        {suffix ? (
+          <Text variant="small" tone="muted">
+            {suffix}
+          </Text>
+        ) : null}
+      </View>
+      {error ? (
+        <Text variant="small" color={status.late.fg}>
+          {error}
+        </Text>
+      ) : helper ? (
+        <Text variant="small" tone="muted">
+          {helper}
+        </Text>
+      ) : null}
+    </View>
+  );
+}

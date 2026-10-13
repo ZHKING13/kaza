@@ -22,12 +22,12 @@ type Props = {
 
 export function TenantRow({ summary, method, amount, first }: Props) {
   const { c } = useTheme();
-  const { tenant, lot, status, dueDate } = summary;
+  const { tenant, unit, status, dueDate } = summary;
   const sub = method
-    ? `${methods[method].short} · ${lot.label}`
+    ? `${methods[method].short} · ${unit.label}`
     : status === 'paid'
-      ? `${lot.label} · ${summary.property.name}`
-      : `Échéance ${formatDayMonth(dueDate)} · ${lot.label}`;
+      ? `${unit.label} · ${summary.property.name}`
+      : `Échéance ${formatDayMonth(dueDate)} · ${unit.label}`;
 
   return (
     <Pressable
@@ -58,7 +58,7 @@ export function TenantRow({ summary, method, amount, first }: Props) {
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Amount value={amount ?? lot.rent} currency={false} />
+          <Amount value={amount ?? unit.rent} currency={false} />
           <StatusBadge status={status} />
         </View>
       </Pressable>

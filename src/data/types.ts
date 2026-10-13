@@ -2,14 +2,20 @@ import type { RentStatus } from '@/theme/tokens';
 
 export type PaymentMethod = 'cash' | 'orange' | 'mtn' | 'wave' | 'moov';
 
+export type PropertyType = 'cour' | 'immeuble' | 'villa' | 'magasin';
+
 export type Property = {
   id: string;
   name: string;
+  type: PropertyType;
   district: string;
   city: string;
+  /** URI locale de la photo, facultative */
+  photo?: string;
+  description?: string;
 };
 
-export type Lot = {
+export type Unit = {
   id: string;
   propertyId: string;
   label: string;
@@ -21,7 +27,7 @@ export type Tenant = {
   firstName: string;
   lastName: string;
   phone: string;
-  lotId: string;
+  unitId: string;
   /** Jour du mois où le loyer est dû */
   dueDay: number;
   /** Mois d'avance encore à consommer */
@@ -41,7 +47,7 @@ export type Payment = {
 
 export type TenantSummary = {
   tenant: Tenant;
-  lot: Lot;
+  unit: Unit;
   property: Property;
   status: RentStatus;
   paid: number;

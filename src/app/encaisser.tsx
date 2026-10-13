@@ -28,16 +28,16 @@ function Label({ children }: { children: string }) {
 
 export default function Encaisser() {
   const { c, status } = useTheme();
-  const params = useLocalSearchParams<{ tenantId?: string }>();
+  const params = useLocalSearchParams<{ tenantId?: string; propertyId?: string }>();
   const { addPayment, today, period } = useStore();
   const summaries = useTenantSummaries();
 
   const candidates = useMemo(
     () =>
       summaries
-        .filter((s) => s.status !== 'paid')
+        .filter((s) => s.status !== 'paid' && (!params.propertyId || s.property.id === params.propertyId))
         .sort((a, b) => (a.status === 'late' ? -1 : 0) - (b.status === 'late' ? -1 : 0)),
-    [summaries],
+    [summaries, params.propertyId],
   );
 
   const [tenantId, setTenantId] = useState<string | undefined>(params.tenantId ?? candidates[0]?.tenant.id);
@@ -65,7 +65,7 @@ export default function Encaisser() {
   if (done && selected) {
     const receipt =
       `Bonjour ${selected.tenant.firstName}, nous confirmons la réception de ${formatAmount(done.amount)} ` +
-      `(${methods[method].label}) pour le loyer de ${formatPeriod(period)}, ${selected.lot.label} – ${selected.property.name}. ` +
+      `(${methods[method].label}) pour le loyer de ${formatPeriod(period)}, ${selected.unit.label} – ${selected.property.name}. ` +
       `Merci ! Kaza`;
     return (
       <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.bg }}>
@@ -113,7 +113,7 @@ export default function Encaisser() {
                   {selected.tenant.firstName} {selected.tenant.lastName}
                 </Text>
                 <Text variant="small" tone="muted">
-                  {selected.lot.label} · {selected.property.name}
+                  {selected.unit.label} · {selected.property.name}
                 </Text>
               </View>
               <StatusBadge status={selected.status} />
@@ -155,7 +155,7 @@ export default function Encaisser() {
                         {s.tenant.firstName} {s.tenant.lastName}
                       </Text>
                       <Text variant="small" tone="muted" numberOfLines={1}>
-                        {s.lot.label} · reste {formatNumber(s.due - s.paid)}
+                        {s.unit.label} · reste {formatNumber(s.due - s.paid)}
                       </Text>
                     </View>
                     <StatusBadge status={s.status} />

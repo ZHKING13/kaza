@@ -102,7 +102,7 @@ export default function Accueil() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <DoorOpen size={16} color={c.textMuted} />
               <Text variant="small" tone="muted">
-                Lots vacants
+                Unités vacantes
               </Text>
             </View>
             <Text variant="h2">{totals.vacantCount}</Text>

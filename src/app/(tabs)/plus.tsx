@@ -63,7 +63,7 @@ export default function Plus() {
         }}>
         <Crown size={24} color={c.accent} />
         <View style={{ flex: 1 }}>
-          <Text variant="bodyStrong">Offre Pro · 19 lots sur 30</Text>
+          <Text variant="bodyStrong">Offre Pro · 19 unités sur 30</Text>
           <Text variant="small" tone="muted">
             Renouvellement le 1er novembre
           </Text>

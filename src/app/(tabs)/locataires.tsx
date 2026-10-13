@@ -37,7 +37,7 @@ export default function Locataires() {
       .filter(
         (s) =>
           !q ||
-          `${s.tenant.firstName} ${s.tenant.lastName} ${s.lot.label} ${s.property.name}`.toLowerCase().includes(q),
+          `${s.tenant.firstName} ${s.tenant.lastName} ${s.unit.label} ${s.property.name}`.toLowerCase().includes(q),
       )
       .sort((a, b) => order[a.status] - order[b.status] || a.tenant.lastName.localeCompare(b.tenant.lastName));
   }, [summaries, query, filter]);
@@ -61,7 +61,7 @@ export default function Locataires() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Nom, lot ou bien"
+            placeholder="Nom, unité ou bien"
             placeholderTextColor={c.textMuted}
             accessibilityLabel="Rechercher un locataire"
             style={{ flex: 1, fontFamily: fonts.regular, fontSize: 16, color: c.text, paddingVertical: space.sm }}

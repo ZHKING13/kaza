@@ -45,7 +45,7 @@ export default function LocataireDetail() {
     return <EmptyState icon={Phone} title="Locataire introuvable" body="Ce locataire a peut-être été supprimé." />;
   }
 
-  const { tenant, lot, property } = summary;
+  const { tenant, unit, property } = summary;
   const history = payments.filter((p) => p.tenantId === tenant.id);
   const remaining = Math.max(summary.due - summary.paid, 0);
   const reminder =
@@ -64,7 +64,7 @@ export default function LocataireDetail() {
               {tenant.firstName} {tenant.lastName}
             </Text>
             <Text variant="small" tone="muted">
-              {lot.label} · {property.name}
+              {unit.label} · {property.name}
             </Text>
             <StatusBadge status={summary.status} style={{ alignSelf: 'flex-start' }} />
           </View>

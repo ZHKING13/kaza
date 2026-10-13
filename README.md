@@ -24,7 +24,7 @@ npm run typecheck
 
 | Dossier | Contenu |
 |---|---|
-| `src/app/` | Écrans (Expo Router) : `(tabs)/` pour les 5 onglets, `encaisser.tsx`, `locataire/[id].tsx` |
+| `src/app/` | Écrans (Expo Router) : `(tabs)/` pour les 5 onglets, `bien/`, `locataire/[id].tsx`, `encaisser.tsx` |
 | `src/components/` | Composants d'interface (Text, Button, Card, StatusBadge, TenantRow, Fab…) |
 | `src/theme/` | Tokens du design system et `useTheme()` (mode clair et sombre) |
 | `src/data/` | Types, données d'exemple et store en mémoire |
@@ -36,7 +36,9 @@ npm run typecheck
 ## Écrans disponibles
 
 - **Accueil** : encaissé du mois, impayés, lots vacants, relance groupée, paiements récents
-- **Biens** : taux d'encaissement par bien
+- **Biens** : encaissé du mois par bien, retards, unités vacantes ; filtres « Avec impayés » et « Unités vacantes »
+- **Fiche bien** : photo ou illustration, encaissé / attendu / occupation, onglets Unités, Locataires, Historique
+- **Nouveau bien** : nom, type, quartier et ville, loyer (villa, magasin) ou liste d'unités avec « Dupliquer », photo facultative
 - **Paiements** : historique groupé par mois
 - **Locataires** : recherche et filtres par statut (En retard, Partiel, À venir, Payé)
 - **Fiche locataire** : appel, relance WhatsApp, situation du mois, historique

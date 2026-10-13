@@ -55,7 +55,7 @@ Les logos des opérateurs gardent toujours leurs couleurs officielles.
 | **Partiel** | `#92400E` | `#FEF3C7` | `circle-dashed` |
 | **En retard** | `#B91C1C` | `#FEE2E2` | `circle-alert` |
 | **À venir** | `#1D4ED8` | `#DBEAFE` | `clock` |
-| **Vacant** | `#475569` | `#F1F5F9` | `door-open` |
+| **Vacante** | `#475569` | `#F1F5F9` | `door-open` |
 
 Tous les couples texte/fond dépassent 4,5:1. En mode sombre, les fonds passent à 15 % d'opacité de la teinte et les textes à la nuance 300.
 

@@ -31,6 +31,9 @@ function RootStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="locataire/[id]" options={{ title: 'Locataire' }} />
         <Stack.Screen name="encaisser" options={{ title: 'Encaisser un loyer', presentation: 'modal' }} />
+        <Stack.Screen name="bien/[id]/index" options={{ headerShown: false }} />
+        <Stack.Screen name="bien/[id]/unites" options={{ title: 'Ajouter des unités', presentation: 'modal' }} />
+        <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
       </Stack>
     </>
   );
