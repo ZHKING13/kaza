@@ -47,6 +47,12 @@
           "cameraPermission": "Kaza utilise l'appareil photo pour photographier vos biens.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Kaza lit le contact que vous choisissez pour remplir la fiche du locataire."
+        }
       ]
     ],
     "experiments": {

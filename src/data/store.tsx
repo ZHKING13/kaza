@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, useReducer, type ReactNode } from '
 import { periodOf } from '@/lib/format';
 
 import { buildPayments, units, properties, tenants } from './mock';
-import type { Unit, Payment, Property, Tenant, TenantSummary } from './types';
+import type { Payment, PaymentMethod, Property, Tenant, TenantSummary, Unit } from './types';
 
 type State = {
   properties: Property[];
@@ -15,7 +15,8 @@ type State = {
 type Action =
   | { type: 'addPayment'; payment: Omit<Payment, 'id'> }
   | { type: 'addProperty'; property: Property; units: Unit[] }
-  | { type: 'addUnits'; units: Unit[] };
+  | { type: 'addUnits'; units: Unit[] }
+  | { type: 'addTenant'; tenant: Tenant; rent: number; payments: Payment[] };
 
 export type NewUnit = Pick<Unit, 'label' | 'rent'>;
 
@@ -30,6 +31,13 @@ function reducer(state: State, action: Action): State {
       return { ...state, properties: [action.property, ...state.properties], units: [...state.units, ...action.units] };
     case 'addUnits':
       return { ...state, units: [...state.units, ...action.units] };
+    case 'addTenant':
+      return {
+        ...state,
+        tenants: [...state.tenants, action.tenant],
+        units: state.units.map((u) => (u.id === action.tenant.unitId ? { ...u, rent: action.rent } : u)),
+        payments: [...action.payments, ...state.payments],
+      };
   }
 }
 
@@ -40,6 +48,14 @@ type Store = State & {
   /** Crée le bien et ses unités, renvoie l'identifiant du bien */
   addProperty: (property: Omit<Property, 'id'>, units: NewUnit[]) => string;
   addUnits: (propertyId: string, units: NewUnit[]) => void;
+  /** Ajoute un locataire ; l'avance est enregistrée comme loyers payés pour les mois suivants. */
+  addTenant: (input: NewTenant) => string;
+};
+
+export type NewTenant = Omit<Tenant, 'id' | 'advanceMonthsLeft'> & {
+  rent: number;
+  advanceMonths: number;
+  advanceMethod: PaymentMethod;
 };
 
 let seq = 0;
@@ -69,6 +85,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return id;
       },
       addUnits: (propertyId, units) => dispatch({ type: 'addUnits', units: toUnits(propertyId, units) }),
+      addTenant: ({ rent, advanceMonths, advanceMethod, ...rest }) => {
+        const id = newId('t');
+        const now = new Date();
+        const payments: Payment[] = Array.from({ length: advanceMonths }, (_, i) => ({
+          id: newId('pay'),
+          tenantId: id,
+          amount: rent,
+          method: advanceMethod,
+          date: now.toISOString(),
+          period: periodOf(new Date(now.getFullYear(), now.getMonth() + i, 1)),
+        }));
+        dispatch({ type: 'addTenant', tenant: { ...rest, id, advanceMonthsLeft: advanceMonths }, rent, payments });
+        return id;
+      },
     }),
     [state, today],
   );

@@ -1,12 +1,14 @@
-import { Search, UserRound } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { Search, UserPlus, UserRound } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
 import { Screen } from '@/components/Screen';
+import { Text } from '@/components/Text';
 import { TenantRow } from '@/components/TenantRow';
 import { useTenantSummaries } from '@/data/store';
 import { fonts, radius, type RentStatus, space, useTheme } from '@/theme';
@@ -44,7 +46,31 @@ export default function Locataires() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Screen title="Locataires" bottomInset={96}>
+      <Screen
+        title="Locataires"
+        bottomInset={96}
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter un locataire"
+            onPress={() => router.push('/locataire/nouveau')}
+            style={({ pressed }) => ({
+              minHeight: 48,
+              paddingHorizontal: space.md,
+              borderRadius: radius.full,
+              borderWidth: 1,
+              borderColor: c.border,
+              backgroundColor: pressed ? c.surfaceAlt : c.surface,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+            })}>
+            <UserPlus size={20} color={c.primary} />
+            <Text variant="bodyStrong" tone="primary">
+              Nouveau
+            </Text>
+          </Pressable>
+        }>
         <View
           style={{
             flexDirection: 'row',

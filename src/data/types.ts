@@ -32,6 +32,10 @@ export type Tenant = {
   dueDay: number;
   /** Mois d'avance encore à consommer */
   advanceMonthsLeft: number;
+  /** Caution versée à l'entrée, en mois de loyer (remboursable) */
+  depositMonths: number;
+  /** Date d'entrée dans le logement (ISO) */
+  entryDate?: string;
 };
 
 export type Payment = {

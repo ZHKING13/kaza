@@ -1,3 +1,5 @@
+import { countries, groupDigits } from '@/data/countries';
+
 const NBSP = '\u00A0';
 
 /** 125000 -> "125 000" (espace insécable entre les milliers) */
@@ -31,11 +33,12 @@ export function formatPeriod(period: string): string {
   return `${MONTHS[m - 1]} ${y}`;
 }
 
-/** "+2250712345678" -> "+225 07 12 34 56 78" */
+/** "+2250712345678" -> "+225 07 12 34 56 78", "+221771234567" -> "+221 77 123 45 67" */
 export function formatPhone(e164: string): string {
-  const m = e164.match(/^\+(\d{3})(\d+)$/);
-  if (!m) return e164;
-  return `+${m[1]} ${m[2].replace(/(\d{2})(?=\d)/g, '$1 ')}`;
+  const digits = e164.replace(/\D/g, '');
+  const country = countries.find((c) => digits.startsWith(c.dial));
+  if (!country) return e164;
+  return `+${country.dial} ${groupDigits(digits.slice(country.dial.length), country.groups)}`;
 }
 
 export function initials(first: string, last: string): string {

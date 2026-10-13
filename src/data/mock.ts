@@ -42,7 +42,7 @@ const t = (
   unitId: string,
   dueDay = 5,
   advanceMonthsLeft = 0,
-): Tenant => ({ id, firstName, lastName, phone, unitId, dueDay, advanceMonthsLeft });
+): Tenant => ({ id, firstName, lastName, phone, unitId, dueDay, advanceMonthsLeft, depositMonths: 2 });
 
 // Les unités l12 et l19 sont vacantes.
 export const tenants: Tenant[] = [

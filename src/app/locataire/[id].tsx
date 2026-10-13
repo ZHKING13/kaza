@@ -46,7 +46,9 @@ export default function LocataireDetail() {
   }
 
   const { tenant, unit, property } = summary;
-  const history = payments.filter((p) => p.tenantId === tenant.id);
+  const history = payments
+    .filter((p) => p.tenantId === tenant.id)
+    .sort((a, b) => b.period.localeCompare(a.period) || b.date.localeCompare(a.date));
   const remaining = Math.max(summary.due - summary.paid, 0);
   const reminder =
     `Bonjour ${tenant.firstName}, le loyer de ${formatPeriod(period)} (${formatAmount(summary.due)}) ` +
@@ -103,9 +105,19 @@ export default function LocataireDetail() {
           <Fact label="Échéance">
             <Text variant="bodyStrong">le {tenant.dueDay} du mois</Text>
           </Fact>
-          <Fact label="Avance restante">
+          <Fact label="Avance à l’entrée">
             <Text variant="bodyStrong">{tenant.advanceMonthsLeft ? `${tenant.advanceMonthsLeft} mois` : 'Aucune'}</Text>
           </Fact>
+          <Fact label="Caution">
+            <Text variant="bodyStrong" style={{ fontVariant: ['tabular-nums'] }}>
+              {tenant.depositMonths ? `${tenant.depositMonths} mois · ${formatAmount(tenant.depositMonths * summary.due)}` : 'Aucune'}
+            </Text>
+          </Fact>
+          {tenant.entryDate ? (
+            <Fact label="Entrée">
+              <Text variant="bodyStrong">{formatDate(tenant.entryDate)}</Text>
+            </Fact>
+          ) : null}
           <Fact label="Téléphone">
             <Text variant="bodyStrong" style={{ fontVariant: ['tabular-nums'] }}>
               {formatPhone(tenant.phone)}

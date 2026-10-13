@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Building2, DoorOpen, Plus, UserRound } from 'lucide-react-native';
+import { ArrowLeft, Building2, DoorOpen, Plus, UserPlus, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +18,7 @@ import { methods } from '@/data/methods';
 import { propertyTypes } from '@/data/propertyTypes';
 import { usePropertySummaries, useStore } from '@/data/store';
 import { formatAmount, formatDate, formatNumber } from '@/lib/format';
-import { elevation, radius, space, useTheme } from '@/theme';
+import { elevation, fonts, radius, space, useTheme } from '@/theme';
 
 type Tab = 'unites' | 'locataires' | 'historique';
 
@@ -69,7 +69,9 @@ export default function BienDetail() {
   const hasPhoto = !!property.photo;
   const onCover = hasPhoto ? '#FFFFFF' : c.text;
   const tenantIds = new Set(s.tenants.map((t) => t.tenant.id));
-  const history = payments.filter((p) => tenantIds.has(p.tenantId));
+  const history = payments
+    .filter((p) => tenantIds.has(p.tenantId))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.period.localeCompare(a.period));
   const outstanding = s.expected - s.collected;
 
   return (
@@ -156,9 +158,18 @@ export default function BienDetail() {
                     <>
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text variant="bodyStrong">{u.label}</Text>
-                        <Text variant="small" tone="muted" numberOfLines={1}>
-                          {t ? `${t.tenant.firstName} ${t.tenant.lastName}` : 'Sans locataire'}
-                        </Text>
+                        {t ? (
+                          <Text variant="small" tone="muted" numberOfLines={1}>
+                            {t.tenant.firstName} {t.tenant.lastName}
+                          </Text>
+                        ) : (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <UserPlus size={14} color={c.primary} />
+                            <Text variant="small" tone="primary" style={{ fontFamily: fonts.medium }}>
+                              Ajouter un locataire
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       <View style={{ alignItems: 'flex-end', gap: 4 }}>
                         <Amount value={u.rent} currency={false} />
@@ -176,18 +187,19 @@ export default function BienDetail() {
                     borderTopWidth: i === 0 ? 0 : 1,
                     borderTopColor: c.border,
                   };
-                  return t ? (
+                  return (
                     <Pressable
                       key={u.id}
                       accessibilityRole="button"
-                      onPress={() => router.push({ pathname: '/locataire/[id]', params: { id: t.tenant.id } })}
+                      accessibilityLabel={t ? undefined : `${u.label}, vacante : ajouter un locataire`}
+                      onPress={() =>
+                        t
+                          ? router.push({ pathname: '/locataire/[id]', params: { id: t.tenant.id } })
+                          : router.push({ pathname: '/locataire/nouveau', params: { unitId: u.id } })
+                      }
                       style={({ pressed }) => [rowStyle, { backgroundColor: pressed ? c.surfaceAlt : 'transparent' }]}>
                       {row}
                     </Pressable>
-                  ) : (
-                    <View key={u.id} style={rowStyle}>
-                      {row}
-                    </View>
                   );
                 })}
               </Card>

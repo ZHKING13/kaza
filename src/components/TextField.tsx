@@ -10,12 +10,14 @@ type Props = TextInputProps & {
   helper?: string;
   error?: string;
   icon?: LucideIcon;
+  /** Texte fixe à gauche du champ, ex. « +225 » */
+  prefix?: string;
   /** Texte fixe à droite du champ, ex. « FCFA » */
   suffix?: string;
 };
 
 /** Champ avec libellé toujours visible au-dessus, aide ou erreur en dessous. */
-export function TextField({ label, helper, error, icon: Icon, suffix, multiline, style, ...rest }: Props) {
+export function TextField({ label, helper, error, icon: Icon, prefix, suffix, multiline, style, ...rest }: Props) {
   const { c, status } = useTheme();
   return (
     <View style={{ gap: 6 }}>
@@ -35,6 +37,11 @@ export function TextField({ label, helper, error, icon: Icon, suffix, multiline,
           backgroundColor: c.surface,
         }}>
         {Icon ? <Icon size={20} color={c.textMuted} style={{ marginTop: multiline ? space.sm : 0 }} /> : null}
+        {prefix ? (
+          <Text variant="bodyStrong" tone="muted">
+            {prefix}
+          </Text>
+        ) : null}
         <TextInput
           accessibilityLabel={label}
           placeholderTextColor={c.textMuted}
@@ -42,6 +49,7 @@ export function TextField({ label, helper, error, icon: Icon, suffix, multiline,
           style={[
             {
               flex: 1,
+              minWidth: 0,
               fontFamily: fonts.regular,
               fontSize: 16,
               color: c.text,
