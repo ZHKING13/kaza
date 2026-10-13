@@ -1,0 +1,43 @@
+# Kaza
+
+Application mobile de gestion locative pour les propriétaires et petites agences d'Afrique francophone :
+encaissement des loyers (espèces, Orange Money, MTN MoMo, Wave, Moov), suivi des impayés,
+relances et quittances sur WhatsApp.
+
+> Version 0.1 : maquette fonctionnelle avec des **données d'exemple** (`src/data/mock.ts`), sans serveur.
+
+## Lancer l'application
+
+```bash
+npm install
+npx expo start        # puis scanner le QR code avec Expo Go (Android / iOS)
+npx expo start --web  # aperçu dans le navigateur
+```
+
+Vérifications avant chaque commit :
+
+```bash
+npm run typecheck
+```
+
+## Organisation
+
+| Dossier | Contenu |
+|---|---|
+| `src/app/` | Écrans (Expo Router) : `(tabs)/` pour les 5 onglets, `encaisser.tsx`, `locataire/[id].tsx` |
+| `src/components/` | Composants d'interface (Text, Button, Card, StatusBadge, TenantRow, Fab…) |
+| `src/theme/` | Tokens du design system et `useTheme()` (mode clair et sombre) |
+| `src/data/` | Types, données d'exemple et store en mémoire |
+| `src/lib/` | Formats locaux (FCFA, dates, téléphones) et liens WhatsApp |
+| `design-system/kaza/MASTER.md` | Spécification du design system |
+| `docs/brand-guidelines.md` | Charte de marque (nom, logo, ton) |
+| `assets/` | Icônes de l'application, splash, logos (`assets/brand/`) |
+
+## Écrans disponibles
+
+- **Accueil** : encaissé du mois, impayés, lots vacants, relance groupée, paiements récents
+- **Biens** : taux d'encaissement par bien
+- **Paiements** : historique groupé par mois
+- **Locataires** : recherche et filtres par statut (En retard, Partiel, À venir, Payé)
+- **Fiche locataire** : appel, relance WhatsApp, situation du mois, historique
+- **Encaisser** : choix du locataire, montant, mode de paiement, puis quittance WhatsApp

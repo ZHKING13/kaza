@@ -79,7 +79,7 @@ Tous les couples texte/fond dépassent 4,5:1. En mode sombre, les fonds passent 
 | `caption` | 12 / 16 | 500 | Horodatages (jamais en dessous) |
 
 ### Formats locaux
-- Montant : `125 000 FCFA`, espace insécable fine pour les milliers, devise **après** le nombre.
+- Montant : `125 000 FCFA`, espace insécable (U+00A0) pour les milliers (l’espace fine est trop étroite en IBM Plex), devise **après** le nombre.
 - Date : `5 oct. 2026` dans les listes, `05/10/2026` dans les formulaires et les quittances.
 - Téléphone : `+225 07 12 34 56 78`, groupes de 2 chiffres.
 

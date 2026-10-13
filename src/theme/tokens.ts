@@ -92,8 +92,8 @@ export const elevation = {
   },
 } as const;
 
-/** 125000 -> "125 000 FCFA" (espace fine insécable) */
+/** 125000 -> "125 000 FCFA" (espace insécable) */
 export function formatAmount(value: number, currency = 'FCFA'): string {
-  const n = Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${n} ${currency}`;
+  const n = Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  return `${n}\u00A0${currency}`;
 }
