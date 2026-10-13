@@ -25,8 +25,8 @@ export default function Parametres() {
           Mois d’entrée et de départ
         </Text>
         <Text variant="small" tone="muted">
-          Comment calculer le loyer quand le locataire n’occupe pas le mois entier. La règle s’applique à l’avance, au solde de départ et
-          aux impayés.
+          Comment calculer le loyer quand le locataire n’occupe pas le mois entier. La règle s’applique à l’avance, au solde de
+          départ et aux impayés.
         </Text>
       </View>
       <View accessibilityRole="radiogroup" style={{ gap: space.xs }}>
@@ -75,6 +75,16 @@ export default function Parametres() {
             </Pressable>
           );
         })}
+      </View>
+
+      <View style={{ gap: 4, marginTop: space.md }}>
+        <Text variant="h3" accessibilityRole="header">
+          Données
+        </Text>
+        <Text variant="small" tone="muted">
+          Vos biens, locataires et paiements sont enregistrés sur ce téléphone. Tant que la synchronisation n’est pas activée, ils
+          ne sont pas récupérables sur un autre appareil.
+        </Text>
       </View>
     </ScrollView>
   );

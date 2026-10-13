@@ -36,7 +36,7 @@ export default function OnboardingPremierBien() {
           body="Une cour, une villa, un immeuble… Vous ajouterez les locataires ensuite."
         />
       </View>
-      <PropertyForm submitLabel="Enregistrer et commencer" onSaved={completeOnboarding} />
+      <PropertyForm compact submitLabel="Enregistrer et commencer" onSaved={completeOnboarding} />
     </View>
   );
 }

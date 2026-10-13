@@ -55,7 +55,7 @@ export default function NouveauLocataire() {
   const { c, status } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ unitId?: string }>();
-  const { units, tenants, properties, addTenant, today, settings } = useStore();
+  const { units, tenants, properties, addTenant, today, settings, profile } = useStore();
 
   const vacant = useMemo(() => {
     const occupied = new Set(tenants.filter((t) => !t.exitDate).map((t) => t.unitId));
@@ -63,7 +63,11 @@ export default function NouveauLocataire() {
   }, [units, tenants]);
 
   const [unitId, setUnitId] = useState<string | undefined>(
-    params.unitId && vacant.some((u) => u.id === params.unitId) ? params.unitId : undefined,
+    params.unitId && vacant.some((u) => u.id === params.unitId)
+      ? params.unitId
+      : vacant.length === 1
+        ? vacant[0].id // une seule unité libre : choisie d'office
+        : undefined,
   );
   const [choosingUnit, setChoosingUnit] = useState(!unitId);
   const unit = units.find((u) => u.id === unitId);
@@ -71,7 +75,8 @@ export default function NouveauLocataire() {
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [country, setCountry] = useState<Country>(countries[0]);
+  // Par défaut, le pays du bailleur (un bailleur à Dakar loue surtout à des numéros sénégalais)
+  const [country, setCountry] = useState<Country>(() => splitPhone(profile.phone || '', countries[0]).country);
   const [national, setNational] = useState('');
   const [rent, setRent] = useState(unit?.rent ?? 0);
   const [dueDay, setDueDay] = useState(5);

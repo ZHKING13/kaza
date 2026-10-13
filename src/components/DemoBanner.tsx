@@ -1,28 +1,51 @@
 import { FlaskConical } from 'lucide-react-native';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { radius, space, useTheme } from '@/theme';
+import { fonts, radius, space, useTheme } from '@/theme';
 
 import { Text } from './Text';
 
-/** Signale que la connexion fonctionne sans serveur : aucun message n'est réellement envoyé. */
-export function DemoBanner({ children }: { children: string }) {
-  const { status } = useTheme();
+/**
+ * Signale le mode démo (données fictives, aucun message envoyé).
+ * Couleur neutre : le jaune est réservé au statut « Partiel ».
+ */
+export function DemoBanner({ children, action }: { children: string; action?: { label: string; onPress: () => void } }) {
+  const { c } = useTheme();
   return (
     <View
       accessibilityRole="alert"
       style={{
-        flexDirection: 'row',
         gap: space.xs,
-        alignItems: 'flex-start',
-        backgroundColor: status.partial.bg,
+        backgroundColor: c.surfaceAlt,
         borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: c.border,
         padding: space.sm,
       }}>
-      <FlaskConical size={18} color={status.partial.fg} style={{ marginTop: 1 }} />
-      <Text variant="small" color={status.partial.fg} style={{ flex: 1 }}>
-        {children}
-      </Text>
+      <View style={{ flexDirection: 'row', gap: space.xs, alignItems: 'flex-start' }}>
+        <FlaskConical size={18} color={c.accent} style={{ marginTop: 1 }} />
+        <Text variant="small" style={{ flex: 1 }}>
+          {children}
+        </Text>
+      </View>
+      {action ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={action.onPress}
+          style={({ pressed }) => ({
+            alignSelf: 'flex-start',
+            marginLeft: 26,
+            minHeight: 40,
+            paddingHorizontal: space.sm,
+            borderRadius: radius.sm,
+            justifyContent: 'center',
+            backgroundColor: pressed ? c.primaryPressed : c.primary,
+          })}>
+          <Text variant="small" color={c.onPrimary} style={{ fontFamily: fonts.semibold }}>
+            {action.label}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

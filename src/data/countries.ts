@@ -1,12 +1,12 @@
 /** Indicatifs des pays cibles et longueur du numéro national (sans indicatif). */
 export const countries = [
-  { code: 'CI', name: 'Côte d’Ivoire', dial: '225', length: 10, groups: [2, 2, 2, 2, 2] },
-  { code: 'SN', name: 'Sénégal', dial: '221', length: 9, groups: [2, 3, 2, 2] },
-  { code: 'CM', name: 'Cameroun', dial: '237', length: 9, groups: [3, 2, 2, 2] },
-  { code: 'BJ', name: 'Bénin', dial: '229', length: 10, groups: [2, 2, 2, 2, 2] },
-  { code: 'TG', name: 'Togo', dial: '228', length: 8, groups: [2, 2, 2, 2] },
-  { code: 'ML', name: 'Mali', dial: '223', length: 8, groups: [2, 2, 2, 2] },
-  { code: 'BF', name: 'Burkina Faso', dial: '226', length: 8, groups: [2, 2, 2, 2] },
+  { code: 'CI', name: 'Côte d’Ivoire', dial: '225', length: 10, groups: [2, 2, 2, 2, 2], city: 'Abidjan' },
+  { code: 'SN', name: 'Sénégal', dial: '221', length: 9, groups: [2, 3, 2, 2], city: 'Dakar' },
+  { code: 'CM', name: 'Cameroun', dial: '237', length: 9, groups: [3, 2, 2, 2], city: 'Douala' },
+  { code: 'BJ', name: 'Bénin', dial: '229', length: 10, groups: [2, 2, 2, 2, 2], city: 'Cotonou' },
+  { code: 'TG', name: 'Togo', dial: '228', length: 8, groups: [2, 2, 2, 2], city: 'Lomé' },
+  { code: 'ML', name: 'Mali', dial: '223', length: 8, groups: [2, 2, 2, 2], city: 'Bamako' },
+  { code: 'BF', name: 'Burkina Faso', dial: '226', length: 8, groups: [2, 2, 2, 2], city: 'Ouagadougou' },
 ] as const;
 
 export type Country = (typeof countries)[number];

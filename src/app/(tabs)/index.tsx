@@ -1,5 +1,4 @@
-import { router } from 'expo-router';
-import { Bell, Building2, CircleAlert, DoorOpen, type LucideIcon, Send, UserPlus } from 'lucide-react-native';
+import { Bell, CircleAlert, DoorOpen, Send } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { Amount } from '@/components/Amount';
@@ -9,49 +8,14 @@ import { Fab } from '@/components/Fab';
 import { KazaMark } from '@/components/KazaMark';
 import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
+import { DemoBanner } from '@/components/DemoBanner';
 import { PaymentRow } from '@/components/PaymentRow';
+import { StartChecklist } from '@/components/StartChecklist';
+import { createAccountFromDemo } from '@/lib/demo';
 import { Text } from '@/components/Text';
 import { useMonthTotals, useStore, useTenantSummaries } from '@/data/store';
 import { formatAmount, formatNumber, formatPeriod } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
-
-function NextStep({
-  icon: Icon,
-  title,
-  body,
-  action,
-  onPress,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  action: string;
-  onPress: () => void;
-}) {
-  const { c } = useTheme();
-  return (
-    <Card style={{ gap: space.sm, borderColor: c.primary, borderWidth: 1.5 }}>
-      <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: radius.md,
-            backgroundColor: c.primarySoft,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-          <Icon size={22} color={c.primary} />
-        </View>
-        <Text variant="h3" style={{ flex: 1 }}>
-          {title}
-        </Text>
-      </View>
-      <Text tone="muted">{body}</Text>
-      <Button label={action} onPress={onPress} />
-    </Card>
-  );
-}
 
 function greeting(d: Date) {
   return d.getHours() < 18 ? 'Bonjour' : 'Bonsoir';
@@ -59,7 +23,7 @@ function greeting(d: Date) {
 
 export default function Accueil() {
   const { c, status } = useTheme();
-  const { payments, today, period, profile, properties, mode } = useStore();
+  const { payments, today, period, profile, mode, signOut } = useStore();
   const summaries = useTenantSummaries();
   const totals = useMonthTotals();
   const pct = totals.expected ? Math.round((totals.collected / totals.expected) * 100) : 0;
@@ -105,6 +69,11 @@ export default function Accueil() {
             </Pressable>
           </View>
         }>
+        {mode === 'demo' ? (
+          <DemoBanner action={{ label: 'Créer mon compte', onPress: () => createAccountFromDemo(signOut) }}>
+            Vous explorez la démo : biens et locataires fictifs.
+          </DemoBanner>
+        ) : null}
         {/* Résumé du mois : la réponse à « où en sont mes loyers ? » */}
         {summaries.length ? (
           <>
@@ -183,23 +152,7 @@ export default function Accueil() {
           </View>
         ) : null}
 
-        {properties.length === 0 ? (
-          <NextStep
-            icon={Building2}
-            title="Ajoutez votre premier bien"
-            body="Une cour, une villa, un immeuble : commencez par le décrire et indiquer ses unités."
-            action="Ajouter un bien"
-            onPress={() => router.push('/bien/nouveau')}
-          />
-        ) : summaries.length === 0 ? (
-          <NextStep
-            icon={UserPlus}
-            title="Ajoutez vos locataires"
-            body="Pour chaque unité louée : nom, téléphone, loyer et avance. Kaza suivra les paiements."
-            action="Ajouter un locataire"
-            onPress={() => router.push('/locataire/nouveau')}
-          />
-        ) : null}
+        <StartChecklist />
 
         {recent.length ? (
           <>

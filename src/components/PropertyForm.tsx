@@ -10,12 +10,11 @@ import { Text } from './Text';
 import { TextField } from './TextField';
 import { draftKey, type UnitDraft, UnitsEditor } from './UnitsEditor';
 import { propertyTypeOrder, propertyTypes } from '@/data/propertyTypes';
+import { countries, splitPhone } from '@/data/countries';
 import { useStore } from '@/data/store';
 import type { PropertyType } from '@/data/types';
 import { formatNumber } from '@/lib/format';
 import { fonts, radius, space, useTheme } from '@/theme';
-
-const CITIES = ['Abidjan', 'Dakar', 'Douala', 'Lomé', 'Cotonou', 'Bamako'];
 
 function Section({ title, optional, children }: { title: string; optional?: boolean; children: React.ReactNode }) {
   return (
@@ -37,18 +36,24 @@ function Section({ title, optional, children }: { title: string; optional?: bool
 export function PropertyForm({
   onSaved,
   submitLabel = 'Enregistrer le bien',
+  compact = false,
 }: {
   onSaved: (propertyId: string) => void;
   submitLabel?: string;
+  /** Onboarding : sans photo ni description, à compléter plus tard */
+  compact?: boolean;
 }) {
   const { c, status } = useTheme();
   const insets = useSafeAreaInsets();
-  const { addProperty } = useStore();
+  const { addProperty, profile } = useStore();
+  // Ville proposée selon le pays du numéro du bailleur ; ses voisines ensuite
+  const homeCountry = splitPhone(profile.phone || '', countries[0]).country;
+  const CITIES = [homeCountry.city, ...countries.map((x) => x.city).filter((x) => x !== homeCountry.city)];
 
   const [name, setName] = useState('');
   const [type, setType] = useState<PropertyType | null>(null);
   const [district, setDistrict] = useState('');
-  const [city, setCity] = useState('Abidjan');
+  const [city, setCity] = useState<string>(homeCountry.city);
   const [rent, setRent] = useState(0);
   const [units, setUnits] = useState<UnitDraft[]>([{ key: draftKey(), label: '', rent: 0 }]);
   const [photo, setPhoto] = useState<string | undefined>();
@@ -209,55 +214,59 @@ export function PropertyForm({
           )
         ) : null}
 
-        <Section title="Photo" optional>
-          {photo ? (
-            <View style={{ gap: space.xs }}>
-              <Image
-                source={{ uri: photo }}
-                style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: radius.md }}
-                accessibilityLabel="Photo du bien"
-              />
-              <View style={{ flexDirection: 'row', gap: space.xs }}>
-                <Button label="Changer" variant="secondary" style={{ flex: 1 }} onPress={pickPhoto} />
-                <Button label="Retirer" variant="ghost" onPress={() => setPhoto(undefined)} />
-              </View>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={pickPhoto}
-              style={({ pressed }) => ({
-                minHeight: 96,
-                borderRadius: radius.md,
-                borderWidth: 1.5,
-                borderStyle: 'dashed',
-                borderColor: c.border,
-                backgroundColor: pressed ? c.surfaceAlt : c.surface,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                padding: space.md,
-              })}>
-              <ImagePlus size={26} color={c.primary} />
-              <Text variant="bodyStrong" tone="primary">
-                Ajouter une photo
-              </Text>
-              <Text variant="caption" tone="muted">
-                Sans photo, Kaza affiche une illustration.
-              </Text>
-            </Pressable>
-          )}
-        </Section>
+        {compact ? null : (
+          <>
+            <Section title="Photo" optional>
+              {photo ? (
+                <View style={{ gap: space.xs }}>
+                  <Image
+                    source={{ uri: photo }}
+                    style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: radius.md }}
+                    accessibilityLabel="Photo du bien"
+                  />
+                  <View style={{ flexDirection: 'row', gap: space.xs }}>
+                    <Button label="Changer" variant="secondary" style={{ flex: 1 }} onPress={pickPhoto} />
+                    <Button label="Retirer" variant="ghost" onPress={() => setPhoto(undefined)} />
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={pickPhoto}
+                  style={({ pressed }) => ({
+                    minHeight: 96,
+                    borderRadius: radius.md,
+                    borderWidth: 1.5,
+                    borderStyle: 'dashed',
+                    borderColor: c.border,
+                    backgroundColor: pressed ? c.surfaceAlt : c.surface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    padding: space.md,
+                  })}>
+                  <ImagePlus size={26} color={c.primary} />
+                  <Text variant="bodyStrong" tone="primary">
+                    Ajouter une photo
+                  </Text>
+                  <Text variant="caption" tone="muted">
+                    Sans photo, Kaza affiche une illustration.
+                  </Text>
+                </Pressable>
+              )}
+            </Section>
 
-        <Section title="Description" optional>
-          <TextField
-            label="Notes sur le bien"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Compteurs, équipements, repères…"
-            multiline
-          />
-        </Section>
+            <Section title="Description" optional>
+              <TextField
+                label="Notes sur le bien"
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Compteurs, équipements, repères…"
+                multiline
+              />
+            </Section>
+          </>
+        )}
       </ScrollView>
 
       <View

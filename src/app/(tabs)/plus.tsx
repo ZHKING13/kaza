@@ -13,6 +13,7 @@ import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { prorataRules } from '@/data/prorata';
 import { useStore } from '@/data/store';
+import { createAccountFromDemo } from '@/lib/demo';
 import { formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
@@ -62,7 +63,11 @@ export default function Plus() {
   const [confirmOut, setConfirmOut] = useState(false);
   return (
     <Screen title="Plus">
-      {mode === 'demo' ? <DemoBanner>Vous explorez la démo : les biens et locataires sont fictifs.</DemoBanner> : null}
+      {mode === 'demo' ? (
+        <DemoBanner action={{ label: 'Créer mon compte', onPress: () => createAccountFromDemo(signOut) }}>
+          Vous explorez la démo : les biens et locataires sont fictifs.
+        </DemoBanner>
+      ) : null}
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <Avatar first={profile.firstName} last={profile.lastName} size={52} />
         <View style={{ flex: 1 }}>

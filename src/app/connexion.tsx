@@ -137,13 +137,19 @@ export default function Connexion() {
             disabled={!!busy}
             onPress={() => sendCode('whatsapp')}
           />
-          <Button
-            label={busy === 'sms' ? 'Envoi…' : 'Recevoir le code par SMS'}
-            icon={MessageSquare}
-            variant="secondary"
+          <Pressable
+            accessibilityRole="button"
             disabled={!!busy}
             onPress={() => sendCode('sms')}
-          />
+            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <MessageSquare size={18} color={c.primary} />
+            <Text variant="small" tone="muted">
+              Pas de WhatsApp ?{' '}
+              <Text variant="small" tone="primary" style={{ fontFamily: fonts.semibold }}>
+                {busy === 'sms' ? 'Envoi…' : 'Recevoir le code par SMS'}
+              </Text>
+            </Text>
+          </Pressable>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -161,20 +167,20 @@ export default function Connexion() {
             disabled={!!busy}
             onPress={() => social('google')}
           />
-          <SocialButton
-            label={busy === 'apple' ? 'Connexion…' : 'Continuer avec Apple'}
-            logo={<AppleLogo color={scheme === 'dark' ? '#000000' : '#FFFFFF'} size={18} />}
-            dark
-            disabled={!!busy}
-            onPress={() => social('apple')}
-          />
+          {/* Apple impose son bouton sur iOS dès qu'une connexion tierce (Google) est proposée ; inutile ailleurs */}
+          {Platform.OS === 'ios' ? (
+            <SocialButton
+              label={busy === 'apple' ? 'Connexion…' : 'Continuer avec Apple'}
+              logo={<AppleLogo color={scheme === 'dark' ? '#000000' : '#FFFFFF'} size={18} />}
+              dark
+              disabled={!!busy}
+              onPress={() => social('apple')}
+            />
+          ) : null}
         </View>
 
         <Text variant="caption" tone="muted" style={{ textAlign: 'center' }}>
           En continuant, vous acceptez les conditions d’utilisation et la politique de confidentialité de Kaza.
-        </Text>
-        <Text variant="caption" tone="muted" style={{ textAlign: 'center', fontFamily: fonts.medium }}>
-          Vos données restent sur ce téléphone tant que la synchronisation n’est pas activée.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -1,22 +1,23 @@
 import { router, Stack } from 'expo-router';
 import { ArrowRight, Phone, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { StepHeader } from '@/components/StepHeader';
 import { PhoneField } from '@/components/PhoneField';
+import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { countries, splitPhone } from '@/data/countries';
 import { useStore } from '@/data/store';
 import { formatPhone } from '@/lib/format';
-import { space, useTheme } from '@/theme';
+import { fonts, space, useTheme } from '@/theme';
 
 export default function OnboardingProfil() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { profile, session, setProfile } = useStore();
+  const { profile, session, setProfile, signOut } = useStore();
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);
   const initial = splitPhone(profile.phone || '', countries[0]);
@@ -48,7 +49,22 @@ export default function OnboardingProfil() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: '' }} />
+      <Stack.Screen
+        options={{
+          title: '',
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              onPress={signOut}
+              hitSlop={8}
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.sm }}>
+              <Text variant="body" tone="primary" style={{ fontFamily: fonts.medium }}>
+                Ce n’est pas moi
+              </Text>
+            </Pressable>
+          ),
+        }}
+      />
       <ScrollView
         contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled">
