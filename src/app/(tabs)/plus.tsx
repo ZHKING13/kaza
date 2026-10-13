@@ -1,9 +1,12 @@
-import { ChevronRight, Crown, FileText, LifeBuoy, type LucideIcon, Settings, UsersRound } from 'lucide-react-native';
+import { ChevronRight, Crown, FileText, LifeBuoy, LogOut, type LucideIcon, Settings, UsersRound } from 'lucide-react-native';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { router } from 'expo-router';
 
 import { Avatar } from '@/components/Avatar';
+import { Button } from '@/components/Button';
+import { DemoBanner } from '@/components/DemoBanner';
 import { Card } from '@/components/Card';
 import { KazaMark } from '@/components/KazaMark';
 import { Screen } from '@/components/Screen';
@@ -13,7 +16,19 @@ import { useStore } from '@/data/store';
 import { formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
-function Row({ icon: Icon, label, hint, first, onPress }: { icon: LucideIcon; label: string; hint?: string; first?: boolean; onPress?: () => void }) {
+function Row({
+  icon: Icon,
+  label,
+  hint,
+  first,
+  onPress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  hint?: string;
+  first?: boolean;
+  onPress?: () => void;
+}) {
   const { c } = useTheme();
   return (
     <Pressable
@@ -42,10 +57,12 @@ function Row({ icon: Icon, label, hint, first, onPress }: { icon: LucideIcon; la
 }
 
 export default function Plus() {
-  const { c } = useTheme();
-  const { settings, profile } = useStore();
+  const { c, status } = useTheme();
+  const { settings, profile, mode, session, signOut, units } = useStore();
+  const [confirmOut, setConfirmOut] = useState(false);
   return (
     <Screen title="Plus">
+      {mode === 'demo' ? <DemoBanner>Vous explorez la démo : les biens et locataires sont fictifs.</DemoBanner> : null}
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <Avatar first={profile.firstName} last={profile.lastName} size={52} />
         <View style={{ flex: 1 }}>
@@ -53,8 +70,13 @@ export default function Plus() {
             {profile.firstName} {profile.lastName}
           </Text>
           <Text variant="small" tone="muted">
-            {formatPhone(profile.phone)}
+            {profile.phone ? formatPhone(profile.phone) : session?.email}
           </Text>
+          {session && session.provider !== 'demo' ? (
+            <Text variant="caption" tone="muted">
+              Connecté avec {session.provider === 'phone' ? 'votre numéro' : session.provider === 'google' ? 'Google' : 'Apple'}
+            </Text>
+          ) : null}
         </View>
       </Card>
 
@@ -71,7 +93,7 @@ export default function Plus() {
         }}>
         <Crown size={24} color={c.accent} />
         <View style={{ flex: 1 }}>
-          <Text variant="bodyStrong">Offre Pro · 19 unités sur 30</Text>
+          <Text variant="bodyStrong">Offre Pro · {units.length} unités sur 30</Text>
           <Text variant="small" tone="muted">
             Renouvellement le 1er novembre
           </Text>
@@ -79,11 +101,38 @@ export default function Plus() {
       </View>
 
       <Card padded={false}>
-        <Row icon={UsersRound} label="Équipe et gérants" hint="1 gérant" first />
+        <Row icon={UsersRound} label="Équipe et gérants" first />
         <Row icon={FileText} label="Rapports et exports" />
-        <Row icon={Settings} label="Paramètres" hint={prorataRules[settings.prorata].label} onPress={() => router.push('/parametres')} />
+        <Row
+          icon={Settings}
+          label="Paramètres"
+          hint={prorataRules[settings.prorata].label}
+          onPress={() => router.push('/parametres')}
+        />
         <Row icon={LifeBuoy} label="Aide sur WhatsApp" />
       </Card>
+
+      {confirmOut ? (
+        <Card style={{ gap: space.sm, borderColor: status.late.fg }}>
+          <Text variant="bodyStrong">{mode === 'demo' ? 'Quitter la démo ?' : 'Se déconnecter ?'}</Text>
+          <Text variant="small" tone="muted">
+            {mode === 'demo'
+              ? 'Les données d’exemple seront effacées et vous reviendrez à l’écran d’accueil.'
+              : 'Vos biens, locataires et paiements enregistrés sur ce téléphone seront effacés.'}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: space.xs }}>
+            <Button label="Annuler" variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmOut(false)} />
+            <Button label={mode === 'demo' ? 'Quitter' : 'Déconnecter'} variant="danger" style={{ flex: 1 }} onPress={signOut} />
+          </View>
+        </Card>
+      ) : (
+        <Button
+          label={mode === 'demo' ? 'Quitter la démo' : 'Se déconnecter'}
+          icon={LogOut}
+          variant="danger"
+          onPress={() => setConfirmOut(true)}
+        />
+      )}
 
       <View style={{ alignItems: 'center', gap: space.xs, paddingTop: space.lg }}>
         <KazaMark size={28} />

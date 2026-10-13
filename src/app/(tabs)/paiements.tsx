@@ -4,7 +4,7 @@ import { Amount } from '@/components/Amount';
 import { Card } from '@/components/Card';
 import { Fab } from '@/components/Fab';
 import { Screen } from '@/components/Screen';
-import { TenantRow } from '@/components/TenantRow';
+import { PaymentRow } from '@/components/PaymentRow';
 import { Text } from '@/components/Text';
 import { useStore, useTenantSummaries } from '@/data/store';
 import type { Payment } from '@/data/types';
@@ -37,10 +37,9 @@ export default function Paiements() {
                 <Amount value={total} variant="small" tone="muted" />
               </View>
               <Card padded={false}>
-                {items.map((p, i) => {
-                  const s = summaries.find((x) => x.tenant.id === p.tenantId)!;
-                  return <TenantRow key={p.id} summary={s} method={p.method} amount={p.amount} first={i === 0} />;
-                })}
+                {items.map((p, i) => (
+                  <PaymentRow key={p.id} payment={p} summaries={summaries} first={i === 0} />
+                ))}
               </Card>
             </View>
           );

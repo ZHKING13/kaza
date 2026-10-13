@@ -4,7 +4,16 @@ Application mobile de gestion locative pour les propriétaires et petites agence
 encaissement des loyers (espèces, Orange Money, MTN MoMo, Wave, Moov), suivi des impayés,
 relances et quittances sur WhatsApp.
 
-> Version 0.1 : maquette fonctionnelle avec des **données d'exemple** (`src/data/mock.ts`), sans serveur.
+> Version 0.1 : application fonctionnelle **sans serveur**. Les données sont enregistrées sur le téléphone
+> (AsyncStorage). La connexion tourne en **mode démo** (`src/lib/auth.ts`) : aucun SMS ni message WhatsApp
+> n'est envoyé, le code s'affiche à l'écran, et Google / Apple renvoient un compte fictif.
+> « Explorer la démo » charge des biens et locataires d'exemple (`src/data/mock.ts`).
+
+## Brancher la vraie connexion
+
+`src/lib/auth.ts` définit l'interface `AuthProvider` (`sendOtp`, `verifyOtp`, `signInWithGoogle`, `signInWithApple`).
+Remplacer `demoAuth` par une implémentation reliée au backend (par exemple Supabase : OTP par SMS ou WhatsApp,
+`signInWithIdToken` pour Google et Apple). Les écrans n'ont pas à changer.
 
 ## Lancer l'application
 
@@ -34,6 +43,10 @@ npm run typecheck
 | `assets/` | Icônes de l'application, splash, logos (`assets/brand/`) |
 
 ## Écrans disponibles
+
+- **Accueil et connexion** : écran de bienvenue, numéro + code par WhatsApp ou SMS (6 chiffres, renvoi après 30 s), Google, Apple, ou démo
+- **Onboarding** : profil (nom sur les quittances), premier bien ; l'Accueil guide ensuite vers l'ajout des locataires
+- **Déconnexion** (Plus) : efface les données du téléphone après confirmation
 
 - **Quittances PDF** : quittance (loyer payé en entier) ou reçu de paiement partiel, montant en lettres, partage WhatsApp ; solde de tout compte en PDF au départ
 

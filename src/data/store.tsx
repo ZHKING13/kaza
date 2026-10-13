@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useReducer, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import { periodOf } from '@/lib/format';
 
@@ -18,7 +19,23 @@ export type Profile = {
   phone: string;
 };
 
+/** Session de l'utilisateur connecté (fournie par lib/auth). */
+export type Session = {
+  provider: 'phone' | 'google' | 'apple' | 'demo';
+  /** Numéro E.164 pour la connexion par téléphone */
+  phone?: string;
+  email?: string;
+  signedInAt: string;
+};
+
 type State = {
+  /** Vrai une fois l'état relu depuis le téléphone */
+  hydrated: boolean;
+  session: Session | null;
+  /** Profil et premier bien renseignés */
+  onboarded: boolean;
+  /** 'demo' : données d'exemple ; 'real' : les biens de l'utilisateur */
+  mode: 'demo' | 'real';
   profile: Profile;
   settings: Settings;
   properties: Property[];
@@ -28,6 +45,11 @@ type State = {
 };
 
 type Action =
+  | { type: 'hydrate'; state: Partial<State> }
+  | { type: 'signIn'; session: Session; profile?: Partial<Profile> }
+  | { type: 'completeOnboarding' }
+  | { type: 'loadDemo'; state: Partial<State> }
+  | { type: 'signOut' }
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'setProfile'; profile: Partial<Profile> }
   | { type: 'addPayment'; payment: Payment }
@@ -40,6 +62,16 @@ export type NewUnit = Pick<Unit, 'label' | 'rent'>;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case 'hydrate':
+      return { ...state, ...action.state, hydrated: true };
+    case 'signIn':
+      return { ...state, session: action.session, profile: { ...state.profile, ...action.profile } };
+    case 'completeOnboarding':
+      return { ...state, onboarded: true };
+    case 'loadDemo':
+      return { ...state, ...action.state };
+    case 'signOut':
+      return { ...emptyState(), hydrated: true };
     case 'setProfile':
       return { ...state, profile: { ...state.profile, ...action.profile } };
     case 'setSettings':
@@ -76,6 +108,12 @@ function reducer(state: State, action: Action): State {
 type Store = State & {
   today: Date;
   period: string;
+  signIn: (session: Omit<Session, 'signedInAt'>, profile?: Partial<Profile>) => void;
+  completeOnboarding: () => void;
+  /** Ouvre l'application avec les données d'exemple, sans compte */
+  startDemo: () => void;
+  /** Déconnecte et efface les données de ce téléphone */
+  signOut: () => void;
   /** Enregistre un paiement et renvoie son identifiant */
   addPayment: (payment: Omit<Payment, 'id'>) => string;
   setSettings: (settings: Partial<Settings>) => void;
@@ -113,18 +151,62 @@ const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(seq++
 const toUnits = (propertyId: string, units: NewUnit[]): Unit[] =>
   units.map((u) => ({ id: newId('u'), propertyId, label: u.label.trim(), rent: u.rent }));
 
-const StoreContext = createContext<Store | null>(null);
+const STORAGE_KEY = 'kaza/state/v1';
+/** Champs sauvegardés sur le téléphone */
+const PERSISTED = ['session', 'onboarded', 'mode', 'profile', 'settings', 'properties', 'units', 'tenants', 'payments'] as const;
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const today = useMemo(() => new Date(), []);
-  const [state, dispatch] = useReducer(reducer, undefined, () => ({
+function emptyState(): State {
+  return {
+    hydrated: false,
+    session: null,
+    onboarded: false,
+    mode: 'real',
+    profile: { firstName: '', lastName: '', phone: '' },
+    settings: { prorata: 'full' },
+    properties: [],
+    units: [],
+    tenants: [],
+    payments: [],
+  };
+}
+
+function demoState(today: Date): Partial<State> {
+  return {
+    session: { provider: 'demo', signedInAt: today.toISOString() },
+    onboarded: true,
+    mode: 'demo',
     profile: { firstName: 'Kouassi', lastName: 'Brou', phone: '+2250700112233' },
-    settings: { prorata: 'full' as ProrataRule },
     properties,
     units,
     tenants,
     payments: buildPayments(today),
-  }));
+  };
+}
+
+const StoreContext = createContext<Store | null>(null);
+
+export function StoreProvider({ children }: { children: ReactNode }) {
+  const today = useMemo(() => new Date(), []);
+  const [state, dispatch] = useReducer(reducer, undefined, emptyState);
+
+  // Relit l'état sauvegardé au démarrage
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => dispatch({ type: 'hydrate', state: raw ? (JSON.parse(raw) as Partial<State>) : {} }))
+      .catch(() => dispatch({ type: 'hydrate', state: {} }));
+  }, []);
+
+  // Sauvegarde après chaque changement (regroupé sur 300 ms)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!state.hydrated) return;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const data = Object.fromEntries(PERSISTED.map((k) => [k, state[k]]));
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
+    }, 300);
+  }, [state]);
+
   const value = useMemo<Store>(
     () => ({
       ...state,
@@ -134,6 +216,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const id = newId('pay');
         dispatch({ type: 'addPayment', payment: { ...payment, id } });
         return id;
+      },
+      signIn: (session, profile) => dispatch({ type: 'signIn', session: { ...session, signedInAt: new Date().toISOString() }, profile }),
+      completeOnboarding: () => dispatch({ type: 'completeOnboarding' }),
+      startDemo: () => dispatch({ type: 'loadDemo', state: demoState(new Date()) }),
+      signOut: () => {
+        AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+        dispatch({ type: 'signOut' });
       },
       setSettings: (settings) => dispatch({ type: 'setSettings', settings }),
       setProfile: (profile) => dispatch({ type: 'setProfile', profile }),
