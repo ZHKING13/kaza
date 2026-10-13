@@ -35,6 +35,8 @@ npm run typecheck
 
 ## Écrans disponibles
 
+- **Quittances PDF** : quittance (loyer payé en entier) ou reçu de paiement partiel, montant en lettres, partage WhatsApp ; solde de tout compte en PDF au départ
+
 - **Paramètres** : règle des mois incomplets (mois complet, au jour près, demi-mois), appliquée au loyer du mois, à l'avance et au solde de départ
 
 - **Accueil** : encaissé du mois, impayés, lots vacants, relance groupée, paiements récents

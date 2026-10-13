@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, MessageCircle } from 'lucide-react-native';
+import { Check, FileText, MessageCircle } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,7 +46,7 @@ export default function Encaisser() {
 
   const [amountText, setAmountText] = useState(remaining ? String(remaining) : '');
   const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [done, setDone] = useState<{ amount: number } | null>(null);
+  const [done, setDone] = useState<{ amount: number; paymentId: string } | null>(null);
 
   const amount = Number(amountText.replace(/\D/g, '')) || 0;
 
@@ -58,8 +58,8 @@ export default function Encaisser() {
 
   const save = () => {
     if (!selected || amount <= 0) return;
-    addPayment({ tenantId: selected.tenant.id, amount, method, date: new Date().toISOString(), period });
-    setDone({ amount });
+    const paymentId = addPayment({ tenantId: selected.tenant.id, amount, method, date: new Date().toISOString(), period });
+    setDone({ amount, paymentId });
   };
 
   if (done && selected) {
@@ -90,8 +90,14 @@ export default function Encaisser() {
             </Text>
           </View>
           <Button
-            label="Envoyer la quittance sur WhatsApp"
+            label="Voir la quittance"
+            icon={FileText}
+            onPress={() => router.replace({ pathname: '/quittance/[id]', params: { id: done.paymentId } })}
+          />
+          <Button
+            label="Confirmer sur WhatsApp"
             icon={MessageCircle}
+            variant="secondary"
             onPress={() => openWhatsApp(selected.tenant.phone, receipt)}
           />
           <Button label="Terminer" variant="secondary" onPress={() => router.back()} />

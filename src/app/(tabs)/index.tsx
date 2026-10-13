@@ -20,7 +20,7 @@ function greeting(d: Date) {
 
 export default function Accueil() {
   const { c, status } = useTheme();
-  const { payments, today, period } = useStore();
+  const { payments, today, period, profile } = useStore();
   const summaries = useTenantSummaries();
   const totals = useMonthTotals();
   const pct = totals.expected ? Math.round((totals.collected / totals.expected) * 100) : 0;
@@ -30,7 +30,7 @@ export default function Accueil() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Screen
         subtitle={greeting(today) + ','}
-        title="Kouassi"
+        title={profile.firstName}
         bottomInset={96}
         right={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>

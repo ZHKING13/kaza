@@ -53,3 +53,9 @@ export function periodOf(date: Date): string {
 export function dayLabel(day: number): string {
   return day === 1 ? '1er' : String(day);
 }
+
+/** "13 octobre 2026" (documents officiels) */
+export function formatDateLong(iso: string): string {
+  const d = new Date(iso);
+  return `${dayLabel(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}

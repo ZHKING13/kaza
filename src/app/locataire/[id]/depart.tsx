@@ -11,11 +11,13 @@ import { Chip } from '@/components/Chip';
 import { DateField } from '@/components/DateField';
 import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
+import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
+import { useSettlementDoc } from '@/data/documents';
 import { Text } from '@/components/Text';
 import { computeSettlement } from '@/data/ledger';
 import { prorataRules, rentForPeriod } from '@/data/prorata';
-import { methodOrder, methods } from '@/data/methods';
+import { byMethod, methodOrder, methods } from '@/data/methods';
 import { useStore } from '@/data/store';
 import type { PaymentMethod, Settlement } from '@/data/types';
 import { dayLabel, formatAmount, formatDate, formatNumber, formatPeriod, periodOf } from '@/lib/format';
@@ -52,6 +54,7 @@ export default function DepartLocataire() {
   const [deductions, setDeductions] = useState<Deduction[]>([]);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>('cash');
   const [done, setDone] = useState<Settlement | null>(null);
+  const settlementDoc = useSettlementDoc(id);
 
   const preview = useMemo(
     () =>
@@ -78,7 +81,7 @@ export default function DepartLocataire() {
       done.deductions.filter((d) => d.amount > 0).map((d) => `, ${d.label || 'retenue'} : ${formatAmount(d.amount)}`).join('') +
       '. ' +
       (done.balance >= 0
-        ? `Nous vous remboursons ${formatAmount(done.balance)}${done.refundMethod ? ` par ${methods[done.refundMethod].label}` : ''}. `
+        ? `Nous vous remboursons ${formatAmount(done.balance)}${done.refundMethod ? ` ${byMethod(done.refundMethod)}` : ''}. `
         : `Il reste ${formatAmount(-done.balance)} à régler. `) +
       `Merci et bonne continuation. Kaza`;
     return (
@@ -105,7 +108,8 @@ export default function DepartLocataire() {
             </Text>
           </View>
           <SettlementSummary s={done} />
-          <Button label="Envoyer le solde sur WhatsApp" icon={MessageCircle} onPress={() => openWhatsApp(tenant.phone, msg)} />
+          {settlementDoc ? <PdfButton label="Partager le solde (PDF)" html={settlementDoc.html} fileName={settlementDoc.fileName} variant="primary" /> : null}
+          <Button label="Envoyer le résumé sur WhatsApp" icon={MessageCircle} variant="secondary" onPress={() => openWhatsApp(tenant.phone, msg)} />
           <Button label="Terminer" variant="secondary" onPress={() => router.back()} />
         </ScrollView>
       </SafeAreaView>

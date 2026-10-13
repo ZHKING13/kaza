@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { DoorOpen, LogOut, MessageCircle, Phone, Plus } from 'lucide-react-native';
-import { ScrollView, View } from 'react-native';
+import { DoorOpen, FileText, LogOut, MessageCircle, Phone, Plus } from 'lucide-react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Amount } from '@/components/Amount';
 import { Avatar } from '@/components/Avatar';
@@ -8,10 +8,12 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
+import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
+import { useSettlementDoc } from '@/data/documents';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Text } from '@/components/Text';
-import { methods } from '@/data/methods';
+import { byMethod, methods } from '@/data/methods';
 import { useFormerTenants, useStore, useTenantSummaries } from '@/data/store';
 import type { Payment } from '@/data/types';
 import { formatAmount, formatDate, formatPeriod, formatPhone } from '@/lib/format';
@@ -49,9 +51,13 @@ function History({ items }: { items: Payment[] }) {
           <EmptyState icon={DoorOpen} title="Aucun paiement" body="Les loyers reçus apparaîtront ici." />
         ) : (
           items.map((p, i) => (
-            <View
+            <Pressable
               key={p.id}
-              style={{
+              accessibilityRole="button"
+              accessibilityHint="Ouvre la quittance"
+              onPress={() => router.push({ pathname: '/quittance/[id]', params: { id: p.id } })}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? c.surfaceAlt : 'transparent',
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: space.sm,
@@ -59,7 +65,7 @@ function History({ items }: { items: Payment[] }) {
                 paddingHorizontal: space.md,
                 borderTopWidth: i === 0 ? 0 : 1,
                 borderTopColor: c.border,
-              }}>
+              })}>
               <MethodDot method={p.method} size={10} />
               <View style={{ flex: 1 }}>
                 <Text variant="bodyStrong" style={{ textTransform: 'capitalize' }}>
@@ -70,7 +76,8 @@ function History({ items }: { items: Payment[] }) {
                 </Text>
               </View>
               <Amount value={p.amount} currency={false} />
-            </View>
+              <FileText size={18} color={c.textMuted} />
+            </Pressable>
           ))
         )}
       </Card>
@@ -84,6 +91,7 @@ export default function LocataireDetail() {
   const { payments, period } = useStore();
   const summary = useTenantSummaries().find((s) => s.tenant.id === id);
   const former = useFormerTenants().find((f) => f.tenant.id === id);
+  const settlementDoc = useSettlementDoc(id);
 
   const historyOf = (tenantId: string) =>
     payments
@@ -122,9 +130,10 @@ export default function LocataireDetail() {
                 Solde de tout compte
               </Text>
               <SettlementSummary s={s} />
+              {settlementDoc ? <PdfButton label="Partager le solde (PDF)" html={settlementDoc.html} fileName={settlementDoc.fileName} /> : null}
               {s.balance > 0 && s.refundMethod ? (
                 <Text variant="small" tone="muted">
-                  Remboursé par {methods[s.refundMethod].label}.
+                  Remboursé {byMethod(s.refundMethod)}.
                 </Text>
               ) : null}
             </>

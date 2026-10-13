@@ -11,7 +11,15 @@ export type Settings = {
   prorata: ProrataRule;
 };
 
+/** Le bailleur : son nom figure sur les quittances. */
+export type Profile = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+};
+
 type State = {
+  profile: Profile;
   settings: Settings;
   properties: Property[];
   units: Unit[];
@@ -21,7 +29,8 @@ type State = {
 
 type Action =
   | { type: 'setSettings'; settings: Partial<Settings> }
-  | { type: 'addPayment'; payment: Omit<Payment, 'id'> }
+  | { type: 'setProfile'; profile: Partial<Profile> }
+  | { type: 'addPayment'; payment: Payment }
   | { type: 'addProperty'; property: Property; units: Unit[] }
   | { type: 'addUnits'; units: Unit[] }
   | { type: 'addTenant'; tenant: Tenant; rent: number; payments: Payment[] }
@@ -31,12 +40,14 @@ export type NewUnit = Pick<Unit, 'label' | 'rent'>;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case 'setProfile':
+      return { ...state, profile: { ...state.profile, ...action.profile } };
     case 'setSettings':
       return { ...state, settings: { ...state.settings, ...action.settings } };
     case 'addPayment':
       return {
         ...state,
-        payments: [{ ...action.payment, id: `pay-${Date.now()}` }, ...state.payments],
+        payments: [action.payment, ...state.payments],
       };
     case 'addProperty':
       return { ...state, properties: [action.property, ...state.properties], units: [...state.units, ...action.units] };
@@ -65,8 +76,10 @@ function reducer(state: State, action: Action): State {
 type Store = State & {
   today: Date;
   period: string;
-  addPayment: (payment: Omit<Payment, 'id'>) => void;
+  /** Enregistre un paiement et renvoie son identifiant */
+  addPayment: (payment: Omit<Payment, 'id'>) => string;
   setSettings: (settings: Partial<Settings>) => void;
+  setProfile: (profile: Partial<Profile>) => void;
   /** Crée le bien et ses unités, renvoie l'identifiant du bien */
   addProperty: (property: Omit<Property, 'id'>, units: NewUnit[]) => string;
   addUnits: (propertyId: string, units: NewUnit[]) => void;
@@ -105,6 +118,7 @@ const StoreContext = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const today = useMemo(() => new Date(), []);
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
+    profile: { firstName: 'Kouassi', lastName: 'Brou', phone: '+2250700112233' },
     settings: { prorata: 'full' as ProrataRule },
     properties,
     units,
@@ -116,8 +130,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...state,
       today,
       period: periodOf(today),
-      addPayment: (payment) => dispatch({ type: 'addPayment', payment }),
+      addPayment: (payment) => {
+        const id = newId('pay');
+        dispatch({ type: 'addPayment', payment: { ...payment, id } });
+        return id;
+      },
       setSettings: (settings) => dispatch({ type: 'setSettings', settings }),
+      setProfile: (profile) => dispatch({ type: 'setProfile', profile }),
       addProperty: (property, units) => {
         const id = newId('p');
         dispatch({ type: 'addProperty', property: { ...property, id }, units: toUnits(id, units) });

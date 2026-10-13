@@ -43,15 +43,17 @@ function Row({ icon: Icon, label, hint, first, onPress }: { icon: LucideIcon; la
 
 export default function Plus() {
   const { c } = useTheme();
-  const { settings } = useStore();
+  const { settings, profile } = useStore();
   return (
     <Screen title="Plus">
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Avatar first="Kouassi" last="Brou" size={52} />
+        <Avatar first={profile.firstName} last={profile.lastName} size={52} />
         <View style={{ flex: 1 }}>
-          <Text variant="h3">Kouassi Brou</Text>
+          <Text variant="h3">
+            {profile.firstName} {profile.lastName}
+          </Text>
           <Text variant="small" tone="muted">
-            {formatPhone('+2250700112233')}
+            {formatPhone(profile.phone)}
           </Text>
         </View>
       </Card>
