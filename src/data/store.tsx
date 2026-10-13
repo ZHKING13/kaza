@@ -4,9 +4,15 @@ import { periodOf } from '@/lib/format';
 
 import { buildPayments, units, properties, tenants } from './mock';
 import { computeSettlement } from './ledger';
+import { type ProrataRule, rentForPeriod } from './prorata';
 import type { Payment, PaymentMethod, Property, Settlement, Tenant, TenantSummary, Unit } from './types';
 
+export type Settings = {
+  prorata: ProrataRule;
+};
+
 type State = {
+  settings: Settings;
   properties: Property[];
   units: Unit[];
   tenants: Tenant[];
@@ -14,6 +20,7 @@ type State = {
 };
 
 type Action =
+  | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'addPayment'; payment: Omit<Payment, 'id'> }
   | { type: 'addProperty'; property: Property; units: Unit[] }
   | { type: 'addUnits'; units: Unit[] }
@@ -24,6 +31,8 @@ export type NewUnit = Pick<Unit, 'label' | 'rent'>;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case 'setSettings':
+      return { ...state, settings: { ...state.settings, ...action.settings } };
     case 'addPayment':
       return {
         ...state,
@@ -57,6 +66,7 @@ type Store = State & {
   today: Date;
   period: string;
   addPayment: (payment: Omit<Payment, 'id'>) => void;
+  setSettings: (settings: Partial<Settings>) => void;
   /** Crée le bien et ses unités, renvoie l'identifiant du bien */
   addProperty: (property: Omit<Property, 'id'>, units: NewUnit[]) => string;
   addUnits: (propertyId: string, units: NewUnit[]) => void;
@@ -80,6 +90,11 @@ export type NewTenant = Omit<Tenant, 'id' | 'advanceMonthsLeft'> & {
   advanceMethod: PaymentMethod;
 };
 
+/** Mois couverts par une avance de `months` mois à partir du mois d'entrée. */
+export function advancePeriods(months: number, entry: Date): string[] {
+  return Array.from({ length: months }, (_, i) => periodOf(new Date(entry.getFullYear(), entry.getMonth() + i, 1)));
+}
+
 let seq = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 const toUnits = (propertyId: string, units: NewUnit[]): Unit[] =>
@@ -90,6 +105,7 @@ const StoreContext = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const today = useMemo(() => new Date(), []);
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
+    settings: { prorata: 'full' as ProrataRule },
     properties,
     units,
     tenants,
@@ -101,6 +117,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       today,
       period: periodOf(today),
       addPayment: (payment) => dispatch({ type: 'addPayment', payment }),
+      setSettings: (settings) => dispatch({ type: 'setSettings', settings }),
       addProperty: (property, units) => {
         const id = newId('p');
         dispatch({ type: 'addProperty', property: { ...property, id }, units: toUnits(id, units) });
@@ -112,13 +129,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const now = new Date();
         // L'avance couvre les mois à partir du mois d'entrée
         const entry = rest.entryDate ? new Date(rest.entryDate) : now;
-        const payments: Payment[] = Array.from({ length: advanceMonths }, (_, i) => ({
+        const payments: Payment[] = advancePeriods(advanceMonths, entry).map((period) => ({
           id: newId('pay'),
           tenantId: id,
-          amount: rent,
+          amount: rentForPeriod(rent, period, state.settings.prorata, rest.entryDate).amount,
           method: advanceMethod,
           date: now.toISOString(),
-          period: periodOf(new Date(entry.getFullYear(), entry.getMonth() + i, 1)),
+          period,
         }));
         dispatch({ type: 'addTenant', tenant: { ...rest, id, advanceMonthsLeft: advanceMonths }, rent, payments });
         return id;
@@ -133,6 +150,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           exitDate,
           deductArrears,
           deductions,
+          rule: state.settings.prorata,
         });
 
         // Les impayés retenus deviennent des paiements « Retenue sur caution », du plus ancien au plus récent
@@ -174,7 +192,7 @@ export function useStore() {
 
 /** Situation de chaque locataire pour le mois en cours. */
 export function useTenantSummaries(): TenantSummary[] {
-  const { tenants, units, properties, payments, today, period } = useStore();
+  const { tenants, units, properties, payments, today, period, settings } = useStore();
   return useMemo(
     () =>
       tenants
@@ -190,7 +208,7 @@ export function useTenantSummaries(): TenantSummary[] {
           const notStarted = !!entry && periodOf(entry) > period;
           let dueDate = new Date(today.getFullYear(), today.getMonth(), tenant.dueDay);
           if (entry && entry > dueDate) dueDate = entry;
-          const due = notStarted ? 0 : unit.rent;
+          const due = rentForPeriod(unit.rent, period, settings.prorata, tenant.entryDate).amount;
           const status: TenantSummary['status'] = notStarted
             ? 'upcoming'
             : paid >= due
@@ -202,7 +220,7 @@ export function useTenantSummaries(): TenantSummary[] {
                   : 'upcoming';
           return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString() };
         }),
-    [tenants, units, properties, payments, today, period],
+    [tenants, units, properties, payments, today, period, settings.prorata],
   );
 }
 

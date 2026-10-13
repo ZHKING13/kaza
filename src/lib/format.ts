@@ -48,3 +48,8 @@ export function initials(first: string, last: string): string {
 export function periodOf(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/** 1 -> "1er", 13 -> "13" */
+export function dayLabel(day: number): string {
+  return day === 1 ? '1er' : String(day);
+}

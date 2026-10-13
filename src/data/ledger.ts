@@ -1,6 +1,7 @@
 import { periodOf } from '@/lib/format';
 import { periodsBetween } from '@/lib/dates';
 
+import { type ProrataRule, rentForPeriod } from './prorata';
 import type { Payment, Tenant } from './types';
 
 export type Balance = {
@@ -12,8 +13,15 @@ export type Balance = {
   prepaid: number;
 };
 
-/** Compte du locataire arrêté au mois `untilPeriod`. */
-export function tenantBalance(tenant: Tenant, rent: number, payments: Payment[], untilPeriod: string): Balance {
+/** Compte du locataire arrêté au mois `untilPeriod` (et à `exitDate` pour le prorata du dernier mois). */
+export function tenantBalance(
+  tenant: Tenant,
+  rent: number,
+  payments: Payment[],
+  untilPeriod: string,
+  rule: ProrataRule = 'full',
+  exitDate?: string,
+): Balance {
   const mine = payments.filter((p) => p.tenantId === tenant.id);
   const firstPaid = mine.reduce<string | undefined>((min, p) => (!min || p.period < min ? p.period : min), undefined);
   const start = tenant.entryDate ? periodOf(new Date(tenant.entryDate)) : (firstPaid ?? untilPeriod);
@@ -21,7 +29,11 @@ export function tenantBalance(tenant: Tenant, rent: number, payments: Payment[],
   const arrearsByPeriod = periodsBetween(start, untilPeriod)
     .map((period) => ({
       period,
-      amount: Math.max(rent - mine.filter((p) => p.period === period).reduce((s, p) => s + p.amount, 0), 0),
+      amount: Math.max(
+        rentForPeriod(rent, period, rule, tenant.entryDate, exitDate).amount -
+          mine.filter((p) => p.period === period).reduce((s, p) => s + p.amount, 0),
+        0,
+      ),
     }))
     .filter((x) => x.amount > 0);
 
@@ -41,14 +53,15 @@ export type SettlementInput = {
   exitDate: string;
   deductArrears: boolean;
   deductions: { label: string; amount: number }[];
+  rule?: ProrataRule;
 };
 
 /**
  * Solde de tout compte : caution + avance non consommée − impayés retenus − retenues.
  * Si les impayés dépassent ce qui est disponible, le solde devient négatif (le locataire doit).
  */
-export function computeSettlement({ tenant, rent, payments, exitDate, deductArrears, deductions }: SettlementInput) {
-  const b = tenantBalance(tenant, rent, payments, periodOf(new Date(exitDate)));
+export function computeSettlement({ tenant, rent, payments, exitDate, deductArrears, deductions, rule = 'full' }: SettlementInput) {
+  const b = tenantBalance(tenant, rent, payments, periodOf(new Date(exitDate)), rule, exitDate);
   const deposit = tenant.depositMonths * rent;
   const available = deposit + b.prepaid;
   const arrearsDeducted = deductArrears ? Math.min(b.arrears, available) : 0;

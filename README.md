@@ -35,6 +35,8 @@ npm run typecheck
 
 ## Écrans disponibles
 
+- **Paramètres** : règle des mois incomplets (mois complet, au jour près, demi-mois), appliquée au loyer du mois, à l'avance et au solde de départ
+
 - **Accueil** : encaissé du mois, impayés, lots vacants, relance groupée, paiements récents
 - **Biens** : encaissé du mois par bien, retards, unités vacantes ; filtres « Avec impayés » et « Unités vacantes »
 - **Fiche bien** : photo ou illustration, encaissé / attendu / occupation, onglets Unités, Locataires, Historique

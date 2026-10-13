@@ -1,19 +1,24 @@
 import { ChevronRight, Crown, FileText, LifeBuoy, type LucideIcon, Settings, UsersRound } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
+import { router } from 'expo-router';
+
 import { Avatar } from '@/components/Avatar';
 import { Card } from '@/components/Card';
 import { KazaMark } from '@/components/KazaMark';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
+import { prorataRules } from '@/data/prorata';
+import { useStore } from '@/data/store';
 import { formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
-function Row({ icon: Icon, label, hint, first }: { icon: LucideIcon; label: string; hint?: string; first?: boolean }) {
+function Row({ icon: Icon, label, hint, first, onPress }: { icon: LucideIcon; label: string; hint?: string; first?: boolean; onPress?: () => void }) {
   const { c } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
+      onPress={onPress}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -38,6 +43,7 @@ function Row({ icon: Icon, label, hint, first }: { icon: LucideIcon; label: stri
 
 export default function Plus() {
   const { c } = useTheme();
+  const { settings } = useStore();
   return (
     <Screen title="Plus">
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -73,7 +79,7 @@ export default function Plus() {
       <Card padded={false}>
         <Row icon={UsersRound} label="Équipe et gérants" hint="1 gérant" first />
         <Row icon={FileText} label="Rapports et exports" />
-        <Row icon={Settings} label="Paramètres" />
+        <Row icon={Settings} label="Paramètres" hint={prorataRules[settings.prorata].label} onPress={() => router.push('/parametres')} />
         <Row icon={LifeBuoy} label="Aide sur WhatsApp" />
       </Card>
 

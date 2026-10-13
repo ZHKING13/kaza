@@ -16,9 +16,10 @@ import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { countries, type Country, groupDigits, splitPhone } from '@/data/countries';
 import { methodOrder, methods } from '@/data/methods';
-import { useStore } from '@/data/store';
+import { rentForPeriod } from '@/data/prorata';
+import { advancePeriods, useStore } from '@/data/store';
 import type { PaymentMethod } from '@/data/types';
-import { formatAmount, formatNumber, formatPeriod, periodOf } from '@/lib/format';
+import { dayLabel, formatAmount, formatNumber, formatPeriod, periodOf } from '@/lib/format';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { fonts, radius, space, useTheme } from '@/theme';
 
@@ -53,7 +54,7 @@ export default function NouveauLocataire() {
   const { c, status } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ unitId?: string }>();
-  const { units, tenants, properties, addTenant, today } = useStore();
+  const { units, tenants, properties, addTenant, today, settings } = useStore();
 
   const vacant = useMemo(() => {
     const occupied = new Set(tenants.filter((t) => !t.exitDate).map((t) => t.unitId));
@@ -77,9 +78,11 @@ export default function NouveauLocataire() {
   const entry = new Date(entryDate);
   const entryPeriod = periodOf(entry);
   const currentPeriod = periodOf(today);
+  const firstMonth = rentForPeriod(rent, entryPeriod, settings.prorata, entryDate);
   const [advance, setAdvance] = useState(1);
   const [advanceMethod, setAdvanceMethod] = useState<PaymentMethod>('cash');
   const [deposit, setDeposit] = useState(2);
+  const advanceTotal = advancePeriods(advance, entry).reduce((s, p) => s + rentForPeriod(rent, p, settings.prorata, entryDate).amount, 0);
   const [submitted, setSubmitted] = useState(false);
   const [contactError, setContactError] = useState<string>();
   const [createdId, setCreatedId] = useState<string>();
@@ -173,7 +176,7 @@ export default function NouveauLocataire() {
             </Text>
             {advance > 0 ? (
               <Text variant="small" color={status.paid.fg} style={{ textAlign: 'center' }}>
-                Avance enregistrée : {advanceRange(advance, entry)} ({formatAmount(advance * rent)})
+                Avance enregistrée : {advanceRange(advance, entry)} ({formatAmount(advanceTotal)})
               </Text>
             ) : null}
           </View>
@@ -345,7 +348,9 @@ export default function NouveauLocataire() {
             min={new Date(today.getFullYear() - 2, today.getMonth(), 1)}
             max={new Date(today.getFullYear(), today.getMonth() + 3, 0)}
             helper={
-              entryPeriod > currentPeriod
+              rent > 0 && firstMonth.partial
+                ? `Premier mois (du ${dayLabel(firstMonth.fromDay)} au ${firstMonth.toDay} ${formatPeriod(entryPeriod).split(' ')[0]}) : ${formatAmount(firstMonth.amount)} au lieu de ${formatAmount(rent)}.`
+                : entryPeriod > currentPeriod
                 ? `Aucun loyer ne sera attendu avant ${formatPeriod(entryPeriod)}.`
                 : entryPeriod < currentPeriod
                   ? 'Entrée passée : enregistrez ensuite les loyers déjà reçus depuis cette date.'
@@ -368,7 +373,7 @@ export default function NouveauLocataire() {
             <Stepper label="Mois d’avance" value={advance} onChange={setAdvance} max={12} unit={(n) => (n === 0 ? 'Aucune' : `${n} mois`)} />
             <Text variant="small" tone="muted">
               {advance > 0 && rent > 0
-                ? `${advance} × ${formatNumber(rent)} = ${formatAmount(advance * rent)}, enregistrés comme loyers payés pour ${advanceRange(advance, entry)}.`
+                ? `${formatAmount(advanceTotal)}${firstMonth.partial ? ' (premier mois au prorata)' : ` (${advance} × ${formatNumber(rent)})`}, enregistrés comme loyers payés pour ${advanceRange(advance, entry)}.`
                 : `Aucune avance : le premier loyer sera attendu en ${formatPeriod(entryPeriod)}.`}
             </Text>
           </View>

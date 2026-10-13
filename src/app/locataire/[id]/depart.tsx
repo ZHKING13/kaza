@@ -14,10 +14,11 @@ import { MethodDot } from '@/components/MethodDot';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { Text } from '@/components/Text';
 import { computeSettlement } from '@/data/ledger';
+import { prorataRules, rentForPeriod } from '@/data/prorata';
 import { methodOrder, methods } from '@/data/methods';
 import { useStore } from '@/data/store';
 import type { PaymentMethod, Settlement } from '@/data/types';
-import { formatAmount, formatDate, formatNumber, formatPeriod } from '@/lib/format';
+import { dayLabel, formatAmount, formatDate, formatNumber, formatPeriod, periodOf } from '@/lib/format';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { fonts, radius, space, useTheme } from '@/theme';
 
@@ -41,7 +42,7 @@ export default function DepartLocataire() {
   const { c, status } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { tenants, units, properties, payments, today, recordDeparture } = useStore();
+  const { tenants, units, properties, payments, today, recordDeparture, settings } = useStore();
   const tenant = tenants.find((t) => t.id === id);
   const unit = units.find((u) => u.id === tenant?.unitId);
   const property = properties.find((p) => p.id === unit?.propertyId);
@@ -62,9 +63,10 @@ export default function DepartLocataire() {
             exitDate,
             deductArrears,
             deductions: deductions.map(({ label, amount }) => ({ label, amount })),
+            rule: settings.prorata,
           })
         : null,
-    [tenant, unit, payments, exitDate, deductArrears, deductions],
+    [tenant, unit, payments, exitDate, deductArrears, deductions, settings.prorata],
   );
 
   if (done && tenant && unit && property) {
@@ -164,7 +166,13 @@ export default function DepartLocataire() {
             onChange={setExitDate}
             min={tenant.entryDate ? new Date(tenant.entryDate) : new Date(today.getFullYear() - 2, today.getMonth(), 1)}
             max={today}
-            helper="Le loyer est dû jusqu’au mois du départ inclus."
+            helper={(() => {
+              const p = periodOf(new Date(exitDate));
+              const last = rentForPeriod(unit.rent, p, settings.prorata, tenant.entryDate, exitDate);
+              return last.partial
+                ? `Dernier mois (${prorataRules[settings.prorata].label.toLowerCase()}, du ${dayLabel(last.fromDay)} au ${last.toDay}) : ${formatAmount(last.amount)} au lieu de ${formatAmount(unit.rent)}.`
+                : `Le loyer de ${formatPeriod(p)} est dû en entier (${prorataRules[settings.prorata].label.toLowerCase()}).`;
+            })()}
           />
         </Section>
 
