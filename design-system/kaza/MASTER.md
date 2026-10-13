@@ -1,4 +1,4 @@
-# LoyerFlow — Design System (MASTER)
+# Kaza — Design System (MASTER)
 
 > Source de vérité globale. Les fichiers de `pages/` surchargent ces règles pour un écran précis.
 > Les valeurs codées sont dans `src/theme/tokens.ts`. Ne jamais écrire une couleur en dur dans un composant.
@@ -117,3 +117,9 @@ Tous les couples texte/fond dépassent 4,5:1. En mode sombre, les fonds passent 
 - Flou, verre dépoli, dégradés lourds ou ombres sur chaque carte.
 - Montants alignés à gauche dans une colonne (les aligner à droite, en chiffres tabulaires).
 - Polices décoratives (le mode `--design-system` proposait Cinzel/Josefin Sans, écartées pour leur lisibilité).
+
+## 10. Marque
+
+Voir `docs/brand-guidelines.md`. Le logo et les icônes sont dans `assets/brand/`.
+Le nom et le slogan utilisent **Bricolage Grotesque ExtraBold** (logo uniquement, vectorisé dans les SVG) ;
+toute l'interface reste en IBM Plex Sans.

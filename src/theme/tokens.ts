@@ -1,4 +1,4 @@
-// LoyerFlow design tokens — source: design-system/loyerflow/MASTER.md
+// Kaza design tokens — source: design-system/kaza/MASTER.md
 
 export const palette = {
   light: {
