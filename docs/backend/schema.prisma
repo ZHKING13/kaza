@@ -1,0 +1,358 @@
+// Kaza — schéma PostgreSQL (Prisma)
+//
+// Principes :
+// - Montants en entiers (Int) : le franc CFA (XOF / XAF) n'a pas de centimes.
+// - Un paiement n'est jamais supprimé : il est annulé (voidedAt + voidReason) pour garder une trace.
+// - Le locataire (personne) et le bail (occupation d'une unité) sont séparés :
+//   un même locataire peut changer d'unité, une unité a un historique de baux.
+// - Toutes les données métier portent organizationId : c'est la frontière d'accès (propriétaire seul ou agence).
+// - Les codes OTP ne sont pas ici : ils vivent dans Redis avec une durée de vie (voir README).
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─────────────────────────────── Comptes ───────────────────────────────
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  /// Numéro E.164, ex. +2250712345678. Facultatif pour un compte créé avec Google ou Apple
+  /// tant que le numéro n'est pas vérifié.
+  phone           String?   @unique
+  phoneVerifiedAt DateTime?
+  email           String?   @unique
+  firstName       String
+  lastName        String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  identities  AuthIdentity[]
+  sessions    Session[]
+  memberships Membership[]
+}
+
+enum AuthProvider {
+  phone
+  google
+  apple
+}
+
+/// Moyen de connexion rattaché à un utilisateur (un utilisateur peut en avoir plusieurs).
+model AuthIdentity {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @db.Uuid
+  provider       AuthProvider
+  /// phone : numéro E.164 ; google / apple : identifiant « sub » du jeton
+  providerUserId String
+  createdAt      DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+/// Session d'un appareil. Le refresh token est stocké haché et change à chaque rafraîchissement.
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  refreshTokenHash String
+  deviceName       String?
+  platform         String? // ios | android | web
+  ip               String?
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+}
+
+// ─────────────────────────── Organisation ───────────────────────────
+
+enum OrganizationType {
+  individual // propriétaire seul
+  agency // agence qui gère pour plusieurs propriétaires
+}
+
+enum ProrataRule {
+  full
+  daily
+  half
+}
+
+enum Plan {
+  free
+  pro
+  agency
+}
+
+/// L'espace de travail : toutes les données métier y sont rattachées.
+model Organization {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String
+  type        OrganizationType @default(individual)
+  /// ISO 3166-1 alpha-2 : CI, SN, CM, BJ, TG, ML, BF
+  countryCode String           @db.Char(2)
+  /// XOF (UEMOA) ou XAF (CEMAC)
+  currency    String           @default("XOF") @db.Char(3)
+  prorataRule ProrataRule      @default(full)
+  plan        Plan             @default(free)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  members     Membership[]
+  properties  Property[]
+  tenants     Tenant[]
+  leases      Lease[]
+  payments    Payment[]
+  activityLog ActivityLog[]
+}
+
+enum Role {
+  owner // tous les droits, facturation
+  manager // gérant : biens, locataires, encaissements
+  collector // collecteur : encaisser et consulter seulement
+  viewer // lecture seule (propriétaire d'une agence, diaspora)
+}
+
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  role           Role
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+// ─────────────────────────── Patrimoine ───────────────────────────
+
+enum PropertyType {
+  cour // cour commune
+  immeuble
+  villa
+  magasin
+}
+
+model Property {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  type           PropertyType
+  district       String
+  city           String
+  photoKey       String? // clé S3 / stockage objet
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  archivedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  units        Unit[]
+
+  @@index([organizationId, archivedAt])
+}
+
+model Unit {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  propertyId     String    @db.Uuid
+  label          String
+  /// Loyer de référence de l'unité. Le loyer réellement dû est celui du bail.
+  rent           Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  archivedAt     DateTime?
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  leases   Lease[]
+
+  @@unique([propertyId, label])
+  @@index([organizationId])
+}
+
+// ─────────────────────────── Locataires et baux ───────────────────────────
+
+model Tenant {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  firstName      String
+  lastName       String
+  phone          String // E.164
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  leases       Lease[]
+
+  @@index([organizationId, lastName])
+  @@index([organizationId, phone])
+}
+
+model Lease {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  unitId         String    @db.Uuid
+  tenantId       String    @db.Uuid
+  rent           Int
+  /// Jour du mois où le loyer est dû (1-28)
+  dueDay         Int       @db.SmallInt
+  entryDate      DateTime  @db.Date
+  exitDate       DateTime? @db.Date
+  depositMonths  Int       @default(0) @db.SmallInt
+  depositAmount  Int       @default(0)
+  /// Mois d'avance versés à l'entrée (les paiements correspondants sont dans Payment)
+  advanceMonths  Int       @default(0) @db.SmallInt
+  createdById    String    @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  unit         Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  payments     Payment[]
+  settlement   Settlement?
+  reminders    Reminder[]
+
+  // Une seule location active par unité : index partiel à ajouter en SQL dans la migration :
+  // CREATE UNIQUE INDEX lease_one_active_per_unit ON "Lease"("unitId") WHERE "exitDate" IS NULL;
+  @@index([organizationId, exitDate])
+  @@index([unitId])
+  @@index([tenantId])
+}
+
+// ─────────────────────────── Argent ───────────────────────────
+
+enum PaymentMethod {
+  cash
+  orange
+  mtn
+  wave
+  moov
+  caution // impayé réglé par retenue sur la caution au départ
+}
+
+enum PaymentSource {
+  manual // saisi par le bailleur ou le gérant
+  mobile_money // confirmé par l'agrégateur (webhook)
+  settlement // créé par le solde de tout compte
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  leaseId        String        @db.Uuid
+  amount         Int
+  method         PaymentMethod
+  source         PaymentSource @default(manual)
+  /// Mois couvert, toujours le 1er du mois (ex. 2026-10-01)
+  period         DateTime      @db.Date
+  receivedAt     DateTime
+  /// Numéro de quittance lisible, ex. Q-202610-7F3A
+  receiptNumber  String        @unique
+  /// Référence de l'agrégateur mobile money (unique : un webhook rejoué ne crée pas de doublon)
+  externalRef    String?       @unique
+  /// Clé envoyée par l'application pour rejouer une requête sans doublon (mode hors ligne)
+  idempotencyKey String?       @unique
+  recordedById   String?       @db.Uuid
+  createdAt      DateTime      @default(now())
+  voidedAt       DateTime?
+  voidReason     String? // ex. « avance rendue au départ », « erreur de saisie »
+  voidedById     String?       @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lease        Lease        @relation(fields: [leaseId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, period])
+  @@index([leaseId, period])
+}
+
+/// Solde de tout compte, figé au départ du locataire.
+model Settlement {
+  id              String         @id @default(uuid()) @db.Uuid
+  leaseId         String         @unique @db.Uuid
+  deposit         Int
+  prepaid         Int
+  arrearsDeducted Int
+  arrearsLeft     Int
+  /// > 0 : à rembourser au locataire ; < 0 : le locataire doit encore ce montant
+  balance         Int
+  refundMethod    PaymentMethod?
+  createdById     String         @db.Uuid
+  createdAt       DateTime       @default(now())
+
+  lease      Lease                 @relation(fields: [leaseId], references: [id], onDelete: Restrict)
+  deductions SettlementDeduction[]
+}
+
+model SettlementDeduction {
+  id           String @id @default(uuid()) @db.Uuid
+  settlementId String @db.Uuid
+  label        String
+  amount       Int
+
+  settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── Communication et traçabilité ───────────────────────────
+
+enum MessageChannel {
+  whatsapp
+  sms
+}
+
+enum ReminderStatus {
+  queued
+  sent
+  delivered
+  failed
+}
+
+/// Relances et quittances envoyées (par l'API WhatsApp ou SMS, plus tard).
+model Reminder {
+  id         String         @id @default(uuid()) @db.Uuid
+  leaseId    String         @db.Uuid
+  channel    MessageChannel
+  template   String // ex. rent_reminder, receipt, welcome, settlement
+  period     DateTime?      @db.Date
+  status     ReminderStatus @default(queued)
+  providerId String?
+  error      String?
+  createdAt  DateTime       @default(now())
+  sentAt     DateTime?
+
+  lease Lease @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([leaseId, createdAt])
+}
+
+/// Qui a fait quoi : l'argument anti-fraude face au gérant.
+model ActivityLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  actorId        String?  @db.Uuid
+  action         String // ex. payment.created, payment.voided, lease.ended
+  entityType     String
+  entityId       String   @db.Uuid
+  data           Json?
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+}

@@ -1,0 +1,136 @@
+# Kaza — backend : dossier de démarrage
+
+Destiné au développeur backend. Ce dossier fixe les décisions, le modèle de données et le contrat d'API
+pour que l'application mobile (déjà fonctionnelle hors ligne) puisse se brancher sur un serveur.
+
+| Fichier | Contenu |
+|---|---|
+| `README.md` | Décisions, architecture, sécurité, plan de livraison |
+| `schema.prisma` | Modèle de données PostgreSQL (validé avec `prisma validate`, Prisma 6.19) |
+| `schema.sql` | Migration initiale générée + index partiel et contraintes `CHECK` (exécutée et testée sur PostgreSQL / PGlite) |
+| `api.md` | Contrat d'API REST v1, aligné sur les écrans de l'application |
+
+## 1. Décisions
+
+| Sujet | Décision | Pourquoi |
+|---|---|---|
+| Framework | **NestJS** (projet neuf, léger) | Compétence de l'équipe. |
+| Base | **PostgreSQL** + Prisma (`prisma migrate`) | Données relationnelles et financières : clés étrangères, contraintes, transactions, agrégats mensuels. |
+| Boilerplate ack | **Référence, pas base** | ack est sur MongoDB (`provider = "mongodb"`), son `User.email` est obligatoire et il n'a pas de connexion par code téléphone. Voir § 6 pour ce qu'on reprend. |
+| Montants | `Int` en francs CFA | Pas de centimes en XOF / XAF ; jamais de `Float` pour de l'argent. |
+| Historique | Rien n'est supprimé : paiements annulés (`voidedAt`), biens archivés (`archivedAt`) | Traçabilité face au gérant ; quittances déjà envoyées. |
+| Multi-compte | `Organization` + `Membership` (rôles) | Propriétaire seul aujourd'hui, agences et gérants ensuite, sans migration. |
+| Locataire / bail | Séparés (`Tenant` / `Lease`) | L'application les confond pour l'instant ; côté serveur, une unité garde l'historique de ses baux. |
+| OTP | **Redis** avec durée de vie, pas en base | Données éphémères ; voir § 4. |
+| Calculs métier | **Package partagé** `@kaza/domain` (§ 3) | Le prorata, les impayés et le solde de départ doivent donner le même résultat sur le téléphone et sur le serveur. |
+
+## 2. Architecture
+
+```
+apps/
+  mobile/        ← l'application Expo actuelle
+  api/           ← NestJS
+packages/
+  domain/        ← règles métier en TypeScript pur, sans dépendance
+```
+
+Monorepo pnpm (ou deux dépôts + `domain` publié en package privé).
+
+Modules NestJS :
+
+| Module | Rôle |
+|---|---|
+| `auth` | OTP (WhatsApp / SMS), Google, Apple, JWT, refresh avec rotation |
+| `session` | Sessions par appareil, déconnexion à distance |
+| `organization` | Organisation, membres, rôles, paramètres (prorata, devise) |
+| `property` | Biens et unités |
+| `tenant` / `lease` | Locataires, baux, entrée (avance), départ (solde de tout compte) |
+| `payment` | Encaissements, annulation, numéros de quittance |
+| `dashboard` | Totaux du mois (attendu, encaissé, impayés, vacants) |
+| `receipt` | PDF de quittance et de solde (plus tard côté serveur, aujourd'hui généré sur le téléphone) |
+| `messaging` | Envoi WhatsApp / SMS (OTP, relances, quittances) via BullMQ |
+| `mobile-money` | Webhooks de l'agrégateur (CinetPay, PayDunya…), rapprochement automatique |
+| `activity-log` | Journal « qui a fait quoi » |
+| `storage` | URLs présignées pour les photos de biens |
+
+Infra minimale du pilote : 1 conteneur API, PostgreSQL managé, Redis managé, stockage objet S3-compatible, Sentry.
+Pas de Vault, nginx ni Bull Board au départ.
+
+## 3. Règles métier partagées (`packages/domain`)
+
+Ces fichiers existent déjà dans l'application, en TypeScript sans dépendance à React Native (seulement l'alias `@/` entre eux). Ils ont été vérifiés à la main sur des cas concrets, **pas encore par des tests unitaires** : à écrire en les déplaçant.
+
+| Fichier actuel (`src/…`) | Contenu |
+|---|---|
+| `data/prorata.ts` | `rentForPeriod` : loyer dû selon la règle (mois complet, au jour près, demi-mois) |
+| `data/ledger.ts` | `tenantBalance`, `computeSettlement` : impayés par mois, avance non consommée, solde de départ |
+| `lib/words.ts` | Montant en lettres pour les quittances |
+| `lib/dates.ts`, `lib/format.ts` (`periodOf`, `formatAmount`) | Périodes `YYYY-MM`, formats FCFA |
+| `data/countries.ts` | Indicatifs, longueur des numéros, ville principale |
+
+Les déplacer dans `packages/domain`, les importer depuis l'application **et** l'API. Le serveur recalcule toujours
+(il ne fait jamais confiance aux montants envoyés par le téléphone), l'application calcule pour l'affichage hors ligne.
+
+## 4. Authentification
+
+Le téléphone est l'identifiant principal ; l'e-mail est facultatif.
+
+**Code par WhatsApp ou SMS**
+1. `POST /v1/auth/otp/send` → code à 6 chiffres, haché (SHA-256 + sel), stocké dans Redis 5 minutes.
+2. Limites : 3 envois par numéro / 10 min, 10 par IP / heure, 5 essais par code, puis blocage 15 min.
+3. `POST /v1/auth/otp/verify` → crée l'utilisateur au premier passage (`AuthIdentity` provider `phone`), renvoie les jetons et `isNewUser`.
+4. Envoi via BullMQ : WhatsApp Cloud API (modèle « authentication ») en premier ; SMS (agrégateur local ou Twilio) si demandé ou en repli après échec.
+
+**Google / Apple** : vérification du jeton côté serveur (repris d'ack, § 6). Un compte créé ainsi doit **vérifier son numéro par code**
+avant de pouvoir envoyer des quittances (`POST /v1/me/phone/verify`) : le numéro apparaît sur les documents.
+
+**Jetons** : access JWT 15 min (`sub`, `orgId`, `role`), refresh opaque 30 jours haché en base (`Session`), rotation à chaque usage,
+réutilisation d'un ancien refresh = révocation de la session.
+
+## 5. Sécurité et règles d'accès
+
+- Chaque requête métier est filtrée par `organizationId` de la membership active ; jamais d'ID d'organisation pris du corps de requête.
+- Rôles : `owner` (tout), `manager` (biens, locataires, encaissements), `collector` (encaisser, consulter), `viewer` (lecture).
+  Annuler un paiement ou enregistrer un départ : `owner` ou `manager` uniquement.
+- Toute écriture d'argent (paiement, annulation, départ) dans une **transaction** + une ligne `ActivityLog`.
+- Idempotence : l'application envoie `Idempotency-Key` sur les `POST` d'argent (elle peut rejouer après une coupure réseau) ;
+  la clé est unique en base (`Payment.idempotencyKey`).
+- Webhooks mobile money : signature vérifiée, `externalRef` unique (un webhook rejoué ne crée pas de doublon), montant revérifié auprès de l'agrégateur.
+- Données personnelles : numéros de téléphone = données à caractère personnel (lois ivoirienne et sénégalaise) ; chiffrement au repos du stockage, export et suppression de compte prévus.
+
+## 6. Ce qu'on reprend d'ack-nestjs-boilerplate (comme référence)
+
+| À reprendre | Où dans ack | Adaptation |
+|---|---|---|
+| Vérification Google / Apple | `src/modules/auth/domains/auth.social.domain.ts` | Ne plus exiger d'e-mail vérifié pour créer le compte (Apple masque souvent l'e-mail). |
+| Sessions et appareils | `src/modules/session`, `src/modules/device` | Refresh haché + rotation. |
+| Rôles et permissions | `src/modules/policy` (CASL) | 4 rôles ci-dessus, portée par organisation. |
+| Journal d'activité | `src/modules/activity-log` | Table `ActivityLog`. |
+| Files d'attente | `src/queues`, BullMQ | Envoi OTP, relances, quittances. |
+| Socle | logger pino, Sentry, helmet, throttler, i18n, health, Swagger | Tel quel. |
+
+À ne pas reprendre : MongoDB et ses `ObjectId`, `username`, historique et expiration des mots de passe, 2FA TOTP,
+conditions d'utilisation versionnées, feature flags, import/export, géolocalisation IP, Vault.
+
+## 7. Brancher l'application
+
+L'application est prête côté interfaces :
+
+- `src/lib/auth.ts` : remplacer `demoAuth` par un `AuthProvider` qui appelle `/v1/auth/*` (les écrans ne changent pas).
+- `src/data/store.tsx` : aujourd'hui source de vérité locale (AsyncStorage). Passer à un cache local + file d'envoi :
+  lecture depuis l'API, écritures envoyées avec `Idempotency-Key`, rejouées au retour du réseau.
+
+## 8. Plan de livraison
+
+| Étape | Contenu | Résultat |
+|---|---|---|
+| 1 | Projet NestJS, Prisma, migration `schema.sql`, `packages/domain`, CI (lint, typecheck, tests) | Base qui démarre |
+| 2 | Auth : OTP WhatsApp / SMS, Google, Apple, sessions | Connexion réelle dans l'application |
+| 3 | Organisation, biens, unités, locataires, baux (entrée avec avance) | Données sauvegardées sur le serveur |
+| 4 | Paiements, annulation, tableau de bord, départ et solde | Parcours complet synchronisé |
+| 5 | Relances et quittances envoyées par WhatsApp (BullMQ) | Moins de gestes pour le bailleur |
+| 6 | Mobile money (agrégateur, webhooks, rapprochement) | Paiement par lien |
+| 7 | Gérants et agences (invitations, rôles) | Offre Pro / Agence |
+
+Tests à écrire en priorité : règles de `packages/domain` (prorata, solde de départ), contraintes d'accès par organisation,
+idempotence des paiements, rejeu de webhook.

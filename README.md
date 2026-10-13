@@ -40,6 +40,7 @@ npm run typecheck
 | `src/lib/` | Formats locaux (FCFA, dates, téléphones) et liens WhatsApp |
 | `design-system/kaza/MASTER.md` | Spécification du design system |
 | `docs/brand-guidelines.md` | Charte de marque (nom, logo, ton) |
+| `docs/backend/` | Dossier backend : décisions, schéma PostgreSQL (Prisma + SQL), contrat d'API |
 | `assets/` | Icônes de l'application, splash, logos (`assets/brand/`) |
 
 ## Écrans disponibles
