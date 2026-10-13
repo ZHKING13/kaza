@@ -1,5 +1,9 @@
 # Kaza — backend : dossier de démarrage
 
+> **Code backend : dépôt `zhking13/kaza-api`.** Le schéma de référence y est `apps/api/prisma/schema.prisma`
+> (Prisma 7) avec sa migration ; les règles métier partagées y sont publiées en `@zhking13/kaza-domain`.
+> Les fichiers `schema.prisma` et `schema.sql` ci-dessous sont la version de conception initiale.
+
 Destiné au développeur backend. Ce dossier fixe les décisions, le modèle de données et le contrat d'API
 pour que l'application mobile (déjà fonctionnelle hors ligne) puisse se brancher sur un serveur.
 
@@ -34,7 +38,8 @@ packages/
   domain/        ← règles métier en TypeScript pur, sans dépendance
 ```
 
-Monorepo pnpm (ou deux dépôts + `domain` publié en package privé).
+Retenu : **deux dépôts**. `kaza-api` (monorepo pnpm : `apps/api` + `packages/domain`) et `loyerflow` (application),
+qui installe `@zhking13/kaza-domain` depuis GitHub Packages.
 
 Modules NestJS :
 
