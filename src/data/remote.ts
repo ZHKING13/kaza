@@ -2,7 +2,7 @@ import { api } from '@/lib/api';
 import { periodOf } from '@/lib/format';
 
 import type { ProrataRule } from './prorata';
-import type { Payment, PaymentMethod, Property, PropertyType, Tenant, Unit } from './types';
+import type { Payment, PaymentMethod, Property, PropertyType, Settlement, Tenant, Unit } from './types';
 
 /**
  * Données du serveur et conversion vers le modèle de l'application.
@@ -47,7 +47,29 @@ type ApiLease = {
   exitDate: string | null;
   depositMonths: number;
   advanceMonths: number;
+  settlement: ApiSettlement | null;
 };
+
+type ApiSettlement = {
+  id: string;
+  deposit: number;
+  prepaid: number;
+  arrearsDeducted: number;
+  arrearsLeft: number;
+  deductions: { label: string; amount: number }[];
+  balance: number;
+  refundMethod: PaymentMethod | null;
+};
+
+export const toSettlement = (s: ApiSettlement): Settlement => ({
+  deposit: s.deposit,
+  prepaid: s.prepaid,
+  arrearsDeducted: s.arrearsDeducted,
+  arrearsLeft: s.arrearsLeft,
+  deductions: s.deductions,
+  balance: s.balance,
+  refundMethod: s.refundMethod ?? undefined,
+});
 
 type ApiSnapshot = {
   organization: ApiOrganization;
@@ -116,6 +138,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
       depositMonths: l.depositMonths,
       entryDate: localNoon(l.entryDate),
       exitDate: l.exitDate ? localNoon(l.exitDate) : undefined,
+      settlement: l.settlement ? toSettlement(l.settlement) : undefined,
       advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
     })),
     payments,
@@ -144,6 +167,16 @@ export type LeaseBody = {
   entryDate: string;
   depositMonths: number;
   advance?: { months: number; method: PaymentMethod };
+};
+
+export type DepartureBody = {
+  /** Identifiant du solde, choisi par le téléphone */
+  id: string;
+  /** "YYYY-MM-DD" */
+  exitDate: string;
+  deductArrears: boolean;
+  deductions: { label: string; amount: number }[];
+  refundMethod?: PaymentMethod;
 };
 
 export type PaymentBody = {
@@ -188,6 +221,21 @@ export const remote = {
 
   createPayment: (orgId: string, body: PaymentBody, idempotencyKey: string) =>
     api.post<ApiPayment>(`/user/organizations/${orgId}/payments`, body, { idempotencyKey }).then(toPayment),
+
+  departure: (orgId: string, leaseId: string, body: DepartureBody) =>
+    api
+      .post<{ settlement: ApiSettlement; payments: ApiPayment[]; voidedPaymentIds: string[] }>(
+        `/user/organizations/${orgId}/leases/${leaseId}/departure`,
+        body,
+      )
+      .then((res) => ({
+        settlement: toSettlement(res.settlement),
+        payments: res.payments.map(toPayment),
+        voidedPaymentIds: res.voidedPaymentIds,
+      })),
+
+  voidPayment: (orgId: string, paymentId: string, reason: string) =>
+    api.post<ApiPayment>(`/user/organizations/${orgId}/payments/${paymentId}/void`, { reason }),
 
   logout: () => api.post<void>('/user/auth/logout', {}),
 };

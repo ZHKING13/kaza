@@ -32,23 +32,27 @@ npx expo start --clear    # --clear à chaque changement de .env
 
 Fonctionnement en mode serveur :
 - **Démarrage** : l'application s'ouvre sur les données du téléphone, puis se met à jour depuis le serveur (lecture hors ligne possible).
-- **Écritures** (espace, bien, unités, locataire, encaissement, profil, règle de prorata) : avec du réseau, envoyées tout
+- **Écritures** (espace, bien, unités, locataire, encaissement, annulation d'un paiement, départ, profil, règle de prorata) : avec du réseau, envoyées tout
   de suite ; le téléphone n'est modifié qu'une fois l'écriture acceptée, et un refus (unité déjà louée…) s'affiche dans
   le formulaire.
 - **Sans réseau** (ou serveur indisponible) : l'écriture est faite sur le téléphone et mise dans la **file d'envoi**
   (`src/data/outbox.ts`), gardée même si l'application est fermée. Elle part dans l'ordre au retour du réseau : nouvel
   essai après 5 s, 10 s, 20 s… (2 min au plus), au retour dans l'application, ou avec « Réessayer maintenant ».
-  - Les identifiants (bien, unités, locataire, paiement) sont choisis par le téléphone (UUID) et repris par le serveur :
+  - Les identifiants (bien, unités, locataire, paiement, solde de départ) sont choisis par le téléphone (UUID) et repris par le serveur :
     rejouer un envoi dont la réponse s'est perdue renvoie l'existant, sans doublon. Le numéro de quittance d'un paiement
     saisi hors ligne ne change pas.
   - Écriture refusée au moment de l'envoi (par exemple une unité louée entre-temps depuis un autre téléphone) : retirée
     de la file, signalée par une bannière, et le téléphone reprend les données du serveur.
   - Tant que la file n'est pas vide, les données du serveur ne remplacent pas celles du téléphone.
   - « Se déconnecter » prévient si des enregistrements n'ont pas encore été envoyés.
-- **Montants** : l'avance d'un nouveau locataire est calculée par le serveur (règle de prorata de l'espace).
+- **Montants** : l'avance d'un nouveau locataire et le solde de départ sont recalculés par le serveur (règle de
+  prorata de l'espace). Au départ, le téléphone affiche tout de suite son propre calcul, puis reprend celui du serveur :
+  impayés réglés par la caution, avance des mois suivants annulée.
+- **Annuler un paiement** : depuis la quittance (« Annuler ce paiement », avec un motif), pour le propriétaire et le
+  gérant. Impossible pour un locataire parti ou une retenue sur caution.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
-- **Pas encore** en mode serveur : départ d'un locataire et solde (le serveur arrive à l'étape 4), photos des biens
-  (gardées sur le téléphone), connexion Google / Apple (boutons masqués).
+- **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
+  masqués), quittance produite par le serveur.
 
 ## Lancer l'application
 

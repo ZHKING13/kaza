@@ -70,15 +70,15 @@ rôle insuffisant : 403 `roleForbidden`. Lecture : tous les rôles ; écriture :
 
 Pour une villa ou un magasin, l'application envoie une seule unité (`label` « Maison » ou « Local »).
 
-## Locataires et baux — **implémenté** (sauf départ : étape 4)
+## Locataires et baux — **implémenté**
 
 | Méthode | Route | Corps / paramètres | Réponse `data` | Écran |
 |---|---|---|---|---|
 | GET | `…/leases` | `?status=active\|ended&rentStatus=late\|partial\|upcoming\|paid&propertyId=&q=&period=` | `[LeaseSummary]` | Locataires |
 | POST | `…/leases` | voir ci-dessous + `Idempotency-Key` | `{ lease: LeaseSummary, payments: [Payment] }` | Nouveau locataire |
 | GET | `…/leases/:id` | — | `LeaseSummary & { payments, balance: { arrears, arrearsByPeriod, prepaid } }` | Fiche locataire |
-| GET | `…/leases/:id/settlement-preview` | `?exitDate=&deductArrears=true&deductions=` | `SettlementPreview` | Départ — **étape 4** |
-| POST | `…/leases/:id/departure` | `{ exitDate, deductArrears, deductions: [{ label, amount }], refundMethod? }` | `settlement` | Départ — **étape 4** |
+| POST | `…/leases/:id/settlement-preview` | `{ exitDate, deductArrears = true, deductions: [{ label, amount }] }` | `SettlementPreview` | Départ (aperçu, rien n'est enregistré) |
+| POST | `…/leases/:id/departure` | `{ id, exitDate, deductArrears = true, deductions, refundMethod? }` | `{ settlement: Settlement, payments: [Payment], voidedPaymentIds }` | Départ |
 
 Corps de `POST …/leases` (une seule transaction : locataire, bail, paiements d'avance, journal) :
 
@@ -104,33 +104,57 @@ calculé par `periodRentStatus` de `@zhking13/kaza-domain` 0.2.0 : en retard **l
 
 Erreurs : `unitNotVacant` (409), `unitNotFound`, `notFound` (404), `tenantPhoneInvalid` (422).
 
+### Départ et solde de tout compte
+
+Réservé au propriétaire et au gérant. Tous les montants sont recalculés par le serveur avec `computeSettlement`
+(`@zhking13/kaza-domain`), à partir des paiements et de la règle de prorata de l'espace ; seules les retenues
+(réparations, factures…) viennent du corps de la requête.
+
+`SettlementPreview = { exitDate, deposit, prepaid, arrears, arrearsByPeriod: [{ period, amount }], arrearsDeducted, arrearsLeft, deductions, balance }`
+— `balance` > 0 : à rembourser au locataire ; < 0 : le locataire doit encore cette somme.
+
+`POST …/departure`, en une transaction :
+- date de sortie posée sur le bail (l'unité redevient vacante) ;
+- impayés retenus (`deductArrears`) : un paiement par mois réglé, méthode `caution`, source `settlement` ;
+- paiements d'avance des mois après la sortie annulés (« Avance rendue au départ ») ;
+- `Settlement = { id, leaseId, exitDate, deposit, prepaid, arrearsDeducted, arrearsLeft, deductions, balance, refundMethod, createdAt }` ;
+- ligne `lease.ended` dans le journal.
+
+L'`id` du solde est choisi par l'application (UUID) : rejouer le départ renvoie le solde existant, sans doublon.
+Le snapshot porte le solde de chaque bail terminé (`leases[].settlement`).
+
+Erreurs : `alreadyEnded` (409), `exitBeforeEntry` (422), `notFound` (404).
+
 ## Synchronisation — **implémentée**
 
 | Méthode | Route | Réponse `data` | Usage |
 |---|---|---|---|
 | GET | `…/snapshot` | `{ organization, properties: [{ …, units }], leases, payments, syncedAt }` | Démarrage de l'application : cache local complet (paiements non annulés) |
 
-## Paiements
+## Paiements — **implémentés** (sauf quittance serveur)
 
 | Méthode | Route | Corps / paramètres | Réponse | Écran |
 |---|---|---|---|---|
-| GET | `…/payments` | `?period=2026-10&leaseId=&cursor=` | `{ items: [Payment], nextCursor }` | Paiements, historique (étape 4 ; le snapshot suffit pour l'instant) |
+| GET | `…/payments` | `?period=2026-10&leaseId=&includeVoided=false&cursor=&limit=50` | `{ items: [Payment], nextCursor }` | Paiements, historique (du plus récent au plus ancien ; l'application utilise le snapshot) |
 | POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt? }` + `Idempotency-Key` | `Payment` — **implémenté** (owner, manager, collector ; `periodBeforeEntry`, `periodAfterExit`) | Encaisser |
-| POST | `…/payments/:id/void` | `{ reason }` | `Payment` | (à venir) annuler une saisie |
-| GET | `…/payments/:id/receipt` | — | `ReceiptData` (quittance ou reçu partiel) | Quittance |
+| POST | `…/payments/:id/void` | `{ reason }` | `Payment` (owner, manager ; déjà annulé : renvoyé tel quel ; bail terminé : `leaseEnded` 409) | Quittance → « Annuler ce paiement » |
+| GET | `…/payments/:id/receipt` | — | `ReceiptData` (quittance ou reçu partiel) | Quittance (à venir) |
 
 `Payment = { id, leaseId, amount, method, source, period, receivedAt, receiptNumber, voidedAt? }`
 
 `ReceiptData = { kind: "quittance" | "recu_partiel", receiptNumber, landlord, tenant, unit, property, period, amount, amountInWords, dueForPeriod, paidForPeriod, method, receivedAt }`
 — l'application continue de produire le PDF ; un rendu PDF serveur (`Accept: application/pdf`) pourra venir ensuite pour l'envoi automatique.
 
-Erreurs : `AMOUNT_INVALID`, `PERIOD_BEFORE_ENTRY`, `PERIOD_AFTER_EXIT`, `IDEMPOTENCY_CONFLICT`.
+Erreurs : `periodBeforeEntry`, `periodAfterExit` (422), `notFound` (404), `leaseEnded`, `idConflict` (409).
 
-## Tableau de bord
+Un paiement annulé reste en base (`voidedAt`, `voidReason`, `voidedById`, ligne `payment.voided` dans le journal) mais
+disparaît du snapshot, des totaux et de la situation du mois.
+
+## Tableau de bord — **implémenté**
 
 | Méthode | Route | Paramètres | Réponse | Écran |
 |---|---|---|---|---|
-| GET | `…/dashboard` | `?period=2026-10` | `{ expected, collected, outstanding, lateCount, paidCount, tenantCount, vacantCount, recentPayments: [Payment] }` | Accueil |
+| GET | `…/dashboard` | `?period=2026-10` | `{ period, expected, collected, outstanding, lateCount, paidCount, tenantCount, vacantCount, recentPayments: [Payment] }` | Accueil (l'application calcule les mêmes chiffres depuis son cache) |
 
 ## Webhooks (public, signés)
 

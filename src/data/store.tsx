@@ -78,6 +78,8 @@ type Action =
   | { type: 'outboxFailed'; failure: OutboxFailure }
   | { type: 'dismissOutboxFailures' }
   | { type: 'replaceLeasePayments'; leaseId: string; removeIds: string[]; payments: Payment[] }
+  | { type: 'setSettlement'; tenantId: string; settlement: Settlement }
+  | { type: 'removePayment'; paymentId: string }
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'setProfile'; profile: Partial<Profile> }
   | { type: 'addPayment'; payment: Payment }
@@ -123,6 +125,13 @@ function reducer(state: State, action: Action): State {
       };
     case 'dismissOutboxFailures':
       return { ...state, outboxFailures: [] };
+    case 'setSettlement':
+      return {
+        ...state,
+        tenants: state.tenants.map((t) => (t.id === action.tenantId ? { ...t, settlement: action.settlement } : t)),
+      };
+    case 'removePayment':
+      return { ...state, payments: state.payments.filter((p) => p.id !== action.paymentId) };
     case 'replaceLeasePayments': {
       // L'avance calculée sur le téléphone est remplacée par celle du serveur (identifiants du serveur)
       const removed = new Set(action.removeIds);
@@ -209,6 +218,8 @@ type Store = State & {
   addTenant: (input: NewTenant) => Promise<string>;
   /** Enregistre le départ : solde de tout compte, impayés retenus sur la caution, unité libérée. */
   recordDeparture: (input: Departure) => Promise<Settlement>;
+  /** Annule un paiement (erreur de saisie, argent non reçu…) : il disparaît des montants encaissés. */
+  voidPayment: (paymentId: string, reason: string) => Promise<void>;
   /** Relance tout de suite l'envoi des écritures en attente */
   retryOutbox: () => void;
   dismissOutboxFailures: () => void;
@@ -331,6 +342,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const afterSent = (result: OutboxResult) => {
     if (result.kind === 'lease') {
       dispatch({ type: 'replaceLeasePayments', leaseId: result.leaseId, removeIds: result.localPaymentIds, payments: result.payments });
+    }
+    if (result.kind === 'departure') {
+      // Montants et retenues du serveur (il a recalculé le solde avec ses données)
+      dispatch({ type: 'setSettlement', tenantId: result.leaseId, settlement: result.settlement });
+      dispatch({ type: 'replaceLeasePayments', leaseId: result.leaseId, removeIds: result.localPaymentIds, payments: result.payments });
+      for (const paymentId of result.voidedPaymentIds) dispatch({ type: 'removePayment', paymentId });
     }
   };
 
@@ -677,10 +694,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apply();
         return id;
       },
-      recordDeparture: async ({ tenantId, exitDate, deductArrears, deductions, refundMethod }) => {
+      voidPayment: async (paymentId, reason) => {
+        const apply = () => dispatch({ type: 'removePayment', paymentId });
         if (online) {
-          throw new Error('Le départ d’un locataire n’est pas encore enregistré sur le serveur. Il arrive avec la prochaine mise à jour.');
+          const payment = state.payments.find((p) => p.id === paymentId);
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'voidPayment',
+              orgId,
+              paymentId,
+              reason,
+              label: `Annulation d’un paiement${payment ? ` de ${formatAmount(payment.amount)}` : ''}`,
+            },
+            apply,
+          );
+          return;
         }
+        apply();
+      },
+      recordDeparture: async ({ tenantId, exitDate, deductArrears, deductions, refundMethod }) => {
         const tenant = state.tenants.find((t) => t.id === tenantId)!;
         const rent = state.units.find((u) => u.id === tenant.unitId)!.rent;
         const { balanceDetail: b, arrearsDeducted, ...rest } = computeSettlement({
@@ -707,15 +740,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           arrearsDeducted,
           refundMethod: rest.balance > 0 ? refundMethod : undefined,
         };
-        dispatch({
-          type: 'recordDeparture',
-          tenantId,
-          exitDate,
-          settlement,
-          addPayments,
-          // L'avance des mois après le départ est rendue : ces paiements sont annulés
-          removePaymentIds: b.prepaidPayments.map((p) => p.id),
-        });
+        const apply = () =>
+          dispatch({
+            type: 'recordDeparture',
+            tenantId,
+            exitDate,
+            settlement,
+            addPayments,
+            // L'avance des mois après le départ est rendue : ces paiements sont annulés
+            removePaymentIds: b.prepaidPayments.map((p) => p.id),
+          });
+        if (online) {
+          const orgId = await ensureOrganization();
+          // Le serveur recalcule le solde avec ses propres données (règle de prorata de l'espace)
+          await write(
+            {
+              kind: 'recordDeparture',
+              orgId,
+              leaseId: tenantId,
+              body: {
+                id: newId(),
+                exitDate: calendarDate(exitDate),
+                deductArrears,
+                deductions,
+                refundMethod: settlement.refundMethod,
+              },
+              localPaymentIds: addPayments.map((p) => p.id),
+              label: `Départ de ${tenant.firstName} ${tenant.lastName}`,
+            },
+            apply,
+          );
+          return settlement;
+        }
+        apply();
         return settlement;
       },
     };

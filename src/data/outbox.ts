@@ -1,8 +1,8 @@
 import { ApiError } from '@/lib/api';
 
 import type { ProrataRule } from './prorata';
-import { type LeaseBody, type PaymentBody, type PropertyBody, remote, type UnitBody } from './remote';
-import type { Payment } from './types';
+import { type DepartureBody, type LeaseBody, type PaymentBody, type PropertyBody, remote, type UnitBody } from './remote';
+import type { Payment, Settlement } from './types';
 
 /**
  * File d'envoi : écritures faites sans réseau (ou pendant qu'une panne serveur dure), gardées sur le
@@ -20,7 +20,10 @@ export type OutboxOp =
   | { kind: 'addUnits'; orgId: string; propertyId: string; units: UnitBody[] }
   /** `localPaymentIds` : avance calculée sur le téléphone, remplacée par celle du serveur après l'envoi */
   | { kind: 'createLease'; orgId: string; body: LeaseBody; localPaymentIds: string[] }
-  | { kind: 'createPayment'; orgId: string; body: PaymentBody };
+  | { kind: 'createPayment'; orgId: string; body: PaymentBody }
+  | { kind: 'voidPayment'; orgId: string; paymentId: string; reason: string }
+  /** `localPaymentIds` : retenues sur caution calculées sur le téléphone, remplacées par celles du serveur */
+  | { kind: 'recordDeparture'; orgId: string; leaseId: string; body: DepartureBody; localPaymentIds: string[] };
 
 export type OutboxEntry = OutboxOp & {
   /** Clé Idempotency-Key, identique à chaque tentative */
@@ -37,7 +40,10 @@ export type OutboxDraft = OutboxOp & { label: string };
 export type OutboxFailure = { key: string; label: string; message: string; at: string };
 
 /** Ce que l'envoi renvoie d'utile au téléphone */
-export type OutboxResult = { kind: 'lease'; leaseId: string; payments: Payment[]; localPaymentIds: string[] } | { kind: 'done' };
+export type OutboxResult =
+  | { kind: 'lease'; leaseId: string; payments: Payment[]; localPaymentIds: string[] }
+  | { kind: 'departure'; leaseId: string; settlement: Settlement; payments: Payment[]; localPaymentIds: string[]; voidedPaymentIds: string[] }
+  | { kind: 'done' };
 
 export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult> {
   switch (entry.kind) {
@@ -67,6 +73,13 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
     case 'createPayment':
       await remote.createPayment(entry.orgId, entry.body, entry.key);
       return { kind: 'done' };
+    case 'voidPayment':
+      await remote.voidPayment(entry.orgId, entry.paymentId, entry.reason);
+      return { kind: 'done' };
+    case 'recordDeparture': {
+      const res = await remote.departure(entry.orgId, entry.leaseId, entry.body);
+      return { kind: 'departure', leaseId: entry.leaseId, localPaymentIds: entry.localPaymentIds, ...res };
+    }
   }
 }
 
