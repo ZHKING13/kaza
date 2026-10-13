@@ -1,11 +1,14 @@
 # Kaza — contrat d'API v1
 
-Base : `/v1`. JSON. Dates ISO 8601 ; périodes au format `YYYY-MM` ; montants en francs CFA entiers.
-Authentification : `Authorization: Bearer <access token>` sauf mention « public ».
+Base : `/api/v1` (socle repris d'ack-nestjs-boilerplate dans `kaza-api`). JSON. Dates ISO 8601 ; périodes au format `YYYY-MM` ;
+montants en francs CFA entiers.
+Toute requête porte `x-api-key: <key>:<secret>` (clé de l'application, type `default`).
+Authentification : `Authorization: Bearer <access token>` en plus, sauf mention « public ».
+Réponses au format ack : `{ statusCode, message, metadata, data }` ; langue des messages : français par défaut, `x-custom-lang: en` sinon.
 Les écritures d'argent acceptent `Idempotency-Key: <uuid>` (rejeu sans doublon).
 
-Erreurs : `{ "error": { "code": "OTP_INVALID", "message": "Code incorrect.", "details": {} } }`
-(messages en français, prêts à afficher).
+Erreurs : `{ "statusCode": 5xxxx, "statusCodeKey": "otpInvalid", "module": "auth", "message": "Code incorrect.", "metadata": {…} }`
+(messages en français, prêts à afficher). Les codes d'erreur ci-dessous correspondent à `statusCodeKey`.
 
 ## Authentification (public)
 

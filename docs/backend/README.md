@@ -20,7 +20,7 @@ pour que l'application mobile (déjà fonctionnelle hors ligne) puisse se branch
 |---|---|---|
 | Framework | **NestJS** (projet neuf, léger) | Compétence de l'équipe. |
 | Base | **PostgreSQL** + Prisma (`prisma migrate`) | Données relationnelles et financières : clés étrangères, contraintes, transactions, agrégats mensuels. |
-| Boilerplate ack | **Référence, pas base** | ack est sur MongoDB (`provider = "mongodb"`), son `User.email` est obligatoire et il n'a pas de connexion par code téléphone. Voir § 6 pour ce qu'on reprend. |
+| Boilerplate ack | **Socle repris, modules adaptés** | Le socle d'ack (outillage, filtres, middlewares, i18n, clés d'API, santé, couche base de données) est repris dans `kaza-api` et porté sur PostgreSQL. Ses modules métier (auth par e-mail, MongoDB) sont adaptés un par un. Voir § 6 et `apps/api/README.md` de `kaza-api`. |
 | Montants | `Int` en francs CFA | Pas de centimes en XOF / XAF ; jamais de `Float` pour de l'argent. |
 | Historique | Rien n'est supprimé : paiements annulés (`voidedAt`), biens archivés (`archivedAt`) | Traçabilité face au gérant ; quittances déjà envoyées. |
 | Multi-compte | `Organization` + `Membership` (rôles) | Propriétaire seul aujourd'hui, agences et gérants ensuite, sans migration. |
@@ -112,7 +112,7 @@ réutilisation d'un ancien refresh = révocation de la session.
 | Rôles et permissions | `src/modules/policy` (CASL) | 4 rôles ci-dessus, portée par organisation. |
 | Journal d'activité | `src/modules/activity-log` | Table `ActivityLog`. |
 | Files d'attente | `src/queues`, BullMQ | Envoi OTP, relances, quittances. |
-| Socle | logger pino, Sentry, helmet, throttler, i18n, health, Swagger | Tel quel. |
+| Socle | logger pino, Sentry, helmet, throttler, i18n, health, Swagger, clés `x-api-key` | **Fait** : repris dans `kaza-api` (PostgreSQL, messages en français). |
 
 À ne pas reprendre : MongoDB et ses `ObjectId`, `username`, historique et expiration des mots de passe, 2FA TOTP,
 conditions d'utilisation versionnées, feature flags, import/export, géolocalisation IP, Vault.
