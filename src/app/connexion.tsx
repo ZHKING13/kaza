@@ -1,15 +1,14 @@
 import { router, Stack } from 'expo-router';
-import { MessageCircle, MessageSquare, Phone } from 'lucide-react-native';
+import { MessageCircle, MessageSquare } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { AppleLogo, GoogleLogo } from '@/components/BrandLogos';
 import { Button } from '@/components/Button';
-import { Chip } from '@/components/Chip';
 import { DemoBanner } from '@/components/DemoBanner';
+import { PhoneField } from '@/components/PhoneField';
 import { Text } from '@/components/Text';
-import { TextField } from '@/components/TextField';
-import { countries, type Country, groupDigits, splitPhone } from '@/data/countries';
+import { countries, type Country } from '@/data/countries';
 import { useStore } from '@/data/store';
 import { auth, type OtpChannel, type SocialIdentity } from '@/lib/auth';
 import { fonts, radius, space, useTheme } from '@/theme';
@@ -117,32 +116,15 @@ export default function Connexion() {
         ) : null}
 
         <View style={{ gap: space.sm }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-            {countries.map((x) => (
-              <Chip
-                key={x.code}
-                label={`${x.code} +${x.dial}`}
-                selected={x.code === country.code}
-                onPress={() => setCountry(x)}
-              />
-            ))}
-          </View>
-          <TextField
+          <PhoneField
             label="Numéro de téléphone"
-            icon={Phone}
-            prefix={`+${country.dial}`}
-            value={groupDigits(digits, country.groups)}
-            onChangeText={(t) => {
-              const s = splitPhone(t, country);
-              setCountry(s.country);
-              setNational(s.national.slice(0, 12));
+            country={country}
+            national={national}
+            onChange={(ct, n) => {
+              setCountry(ct);
+              setNational(n);
               setError(undefined);
             }}
-            keyboardType="phone-pad"
-            autoComplete="tel"
-            textContentType="telephoneNumber"
-            placeholder={`${country.length} chiffres`}
-            style={{ fontVariant: ['tabular-nums'] }}
           />
           {error ? (
             <Text variant="small" color={status.late.fg}>

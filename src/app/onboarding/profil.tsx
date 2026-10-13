@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { StepHeader } from '@/components/StepHeader';
+import { PhoneField } from '@/components/PhoneField';
 import { TextField } from '@/components/TextField';
-import { countries, groupDigits, splitPhone } from '@/data/countries';
+import { countries, splitPhone } from '@/data/countries';
 import { useStore } from '@/data/store';
 import { formatPhone } from '@/lib/format';
 import { space, useTheme } from '@/theme';
@@ -85,18 +86,14 @@ export default function OnboardingProfil() {
             helper="Vérifié par code."
           />
         ) : (
-          <TextField
+          <PhoneField
             label="Numéro WhatsApp"
-            icon={Phone}
-            prefix={`+${country.dial}`}
-            value={groupDigits(digits, country.groups)}
-            onChangeText={(t) => {
-              const s = splitPhone(t, country);
-              setCountry(s.country);
-              setNational(s.national.slice(0, 12));
+            country={country}
+            national={national}
+            onChange={(ct, n) => {
+              setCountry(ct);
+              setNational(n);
             }}
-            keyboardType="phone-pad"
-            placeholder={`${country.length} chiffres`}
             helper="Affiché sur les quittances, pour que vos locataires puissent vous joindre."
             error={show(errors.phone)}
           />

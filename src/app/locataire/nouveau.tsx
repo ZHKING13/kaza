@@ -1,6 +1,6 @@
 import { Contact } from 'expo-contacts';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { BookUser, Check, DoorOpen, MessageCircle, Phone, UserRound, X } from 'lucide-react-native';
+import { BookUser, Check, DoorOpen, MessageCircle, UserRound, X } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,9 +12,10 @@ import { DateField } from '@/components/DateField';
 import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
 import { Stepper } from '@/components/Stepper';
+import { PhoneField } from '@/components/PhoneField';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
-import { countries, type Country, groupDigits, splitPhone } from '@/data/countries';
+import { countries, type Country, splitPhone } from '@/data/countries';
 import { methodOrder, methods } from '@/data/methods';
 import { rentForPeriod } from '@/data/prorata';
 import { advancePeriods, useStore } from '@/data/store';
@@ -74,7 +75,9 @@ export default function NouveauLocataire() {
   const [national, setNational] = useState('');
   const [rent, setRent] = useState(unit?.rent ?? 0);
   const [dueDay, setDueDay] = useState(5);
-  const [entryDate, setEntryDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString());
+  const [entryDate, setEntryDate] = useState(() =>
+    new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
+  );
   const entry = new Date(entryDate);
   const entryPeriod = periodOf(entry);
   const currentPeriod = periodOf(today);
@@ -82,7 +85,10 @@ export default function NouveauLocataire() {
   const [advance, setAdvance] = useState(1);
   const [advanceMethod, setAdvanceMethod] = useState<PaymentMethod>('cash');
   const [deposit, setDeposit] = useState(2);
-  const advanceTotal = advancePeriods(advance, entry).reduce((s, p) => s + rentForPeriod(rent, p, settings.prorata, entryDate).amount, 0);
+  const advanceTotal = advancePeriods(advance, entry).reduce(
+    (s, p) => s + rentForPeriod(rent, p, settings.prorata, entryDate).amount,
+    0,
+  );
   const [submitted, setSubmitted] = useState(false);
   const [contactError, setContactError] = useState<string>();
   const [createdId, setCreatedId] = useState<string>();
@@ -108,7 +114,9 @@ export default function NouveauLocataire() {
         setNational(split.national);
       }
     } catch {
-      setContactError('Impossible d’ouvrir vos contacts. Autorisez l’accès dans les réglages du téléphone, ou saisissez le numéro.');
+      setContactError(
+        'Impossible d’ouvrir vos contacts. Autorisez l’accès dans les réglages du téléphone, ou saisissez le numéro.',
+      );
     }
   };
 
@@ -180,7 +188,11 @@ export default function NouveauLocataire() {
               </Text>
             ) : null}
           </View>
-          <Button label="Envoyer un message de bienvenue" icon={MessageCircle} onPress={() => openWhatsApp(`+${country.dial}${digits}`, welcome)} />
+          <Button
+            label="Envoyer un message de bienvenue"
+            icon={MessageCircle}
+            onPress={() => openWhatsApp(`+${country.dial}${digits}`, welcome)}
+          />
           <Button
             label="Voir la fiche du locataire"
             variant="secondary"
@@ -211,7 +223,9 @@ export default function NouveauLocataire() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={{ padding: space.md, gap: space.xl, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ padding: space.md, gap: space.xl, paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled">
         <Section title="Unité louée">
           {!choosingUnit && unit && property ? (
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -236,7 +250,11 @@ export default function NouveauLocataire() {
             </Card>
           ) : vacant.length === 0 ? (
             <Card padded={false}>
-              <EmptyState icon={DoorOpen} title="Aucune unité vacante" body="Toutes vos unités sont louées. Ajoutez des unités depuis la fiche d’un bien." />
+              <EmptyState
+                icon={DoorOpen}
+                title="Aucune unité vacante"
+                body="Toutes vos unités sont louées. Ajoutez des unités depuis la fiche d’un bien."
+              />
             </Card>
           ) : (
             <Card padded={false}>
@@ -244,7 +262,15 @@ export default function NouveauLocataire() {
                 .filter((p) => vacant.some((u) => u.propertyId === p.id))
                 .map((p, pi) => (
                   <View key={p.id}>
-                    <View style={{ paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: 4, borderTopWidth: pi === 0 ? 0 : 1, borderTopColor: c.border, backgroundColor: c.surfaceAlt }}>
+                    <View
+                      style={{
+                        paddingHorizontal: space.md,
+                        paddingTop: space.sm,
+                        paddingBottom: 4,
+                        borderTopWidth: pi === 0 ? 0 : 1,
+                        borderTopColor: c.border,
+                        backgroundColor: c.surfaceAlt,
+                      }}>
                       <Text variant="label" tone="muted">
                         {p.name.toUpperCase()}
                       </Text>
@@ -298,30 +324,32 @@ export default function NouveauLocataire() {
               {contactError}
             </Text>
           ) : null}
-          <TextField label="Prénom" icon={UserRound} value={firstName} onChangeText={setFirstName} placeholder="Ex. Awa" autoCapitalize="words" error={show(errors.firstName)} />
-          <TextField label="Nom" value={lastName} onChangeText={setLastName} placeholder="Ex. Koné" autoCapitalize="words" error={show(errors.lastName)} />
-          <View style={{ gap: 6 }}>
-            <FieldLabel>Pays du numéro</FieldLabel>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.xs }}>
-              {countries.map((x) => (
-                <Chip key={x.code} label={`${x.name} +${x.dial}`} selected={x.code === country.code} onPress={() => setCountry(x)} />
-              ))}
-            </ScrollView>
-          </View>
           <TextField
+            label="Prénom"
+            icon={UserRound}
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="Ex. Awa"
+            autoCapitalize="words"
+            error={show(errors.firstName)}
+          />
+          <TextField
+            label="Nom"
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="Ex. Koné"
+            autoCapitalize="words"
+            error={show(errors.lastName)}
+          />
+          <PhoneField
             label="Téléphone (WhatsApp de préférence)"
-            icon={Phone}
-            prefix={`+${country.dial}`}
-            value={groupDigits(digits, country.groups)}
-            onChangeText={(t) => {
-              const split = splitPhone(t, country);
-              setCountry(split.country);
-              setNational(split.national.slice(0, 12));
+            country={country}
+            national={national}
+            onChange={(ct, n) => {
+              setCountry(ct);
+              setNational(n);
             }}
-            keyboardType="phone-pad"
-            placeholder={`${country.length} chiffres`}
             error={show(errors.phone)}
-            style={{ fontVariant: ['tabular-nums'] }}
           />
         </Section>
 
@@ -351,10 +379,10 @@ export default function NouveauLocataire() {
               rent > 0 && firstMonth.partial
                 ? `Premier mois (du ${dayLabel(firstMonth.fromDay)} au ${firstMonth.toDay} ${formatPeriod(entryPeriod).split(' ')[0]}) : ${formatAmount(firstMonth.amount)} au lieu de ${formatAmount(rent)}.`
                 : entryPeriod > currentPeriod
-                ? `Aucun loyer ne sera attendu avant ${formatPeriod(entryPeriod)}.`
-                : entryPeriod < currentPeriod
-                  ? 'Entrée passée : enregistrez ensuite les loyers déjà reçus depuis cette date.'
-                  : undefined
+                  ? `Aucun loyer ne sera attendu avant ${formatPeriod(entryPeriod)}.`
+                  : entryPeriod < currentPeriod
+                    ? 'Entrée passée : enregistrez ensuite les loyers déjà reçus depuis cette date.'
+                    : undefined
             }
           />
           <View style={{ gap: 6 }}>
@@ -370,7 +398,13 @@ export default function NouveauLocataire() {
         <Section title="À l’entrée">
           <View style={{ gap: 6 }}>
             <FieldLabel>Avance payée</FieldLabel>
-            <Stepper label="Mois d’avance" value={advance} onChange={setAdvance} max={12} unit={(n) => (n === 0 ? 'Aucune' : `${n} mois`)} />
+            <Stepper
+              label="Mois d’avance"
+              value={advance}
+              onChange={setAdvance}
+              max={12}
+              unit={(n) => (n === 0 ? 'Aucune' : `${n} mois`)}
+            />
             <Text variant="small" tone="muted">
               {advance > 0 && rent > 0
                 ? `${formatAmount(advanceTotal)}${firstMonth.partial ? ' (premier mois au prorata)' : ` (${advance} × ${formatNumber(rent)})`}, enregistrés comme loyers payés pour ${advanceRange(advance, entry)}.`
@@ -412,7 +446,13 @@ export default function NouveauLocataire() {
           ) : null}
           <View style={{ gap: 6 }}>
             <FieldLabel>Caution</FieldLabel>
-            <Stepper label="Mois de caution" value={deposit} onChange={setDeposit} max={6} unit={(n) => (n === 0 ? 'Aucune' : `${n} mois`)} />
+            <Stepper
+              label="Mois de caution"
+              value={deposit}
+              onChange={setDeposit}
+              max={6}
+              unit={(n) => (n === 0 ? 'Aucune' : `${n} mois`)}
+            />
             <Text variant="small" tone="muted">
               {deposit > 0 && rent > 0
                 ? `${formatAmount(deposit * rent)}, remboursables au départ. La caution n’entre pas dans les encaissements.`

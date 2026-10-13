@@ -1,6 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native';
+import { useState } from 'react';
 import { TextInput, type TextInputProps, View } from 'react-native';
 
+import { noWebOutline } from '@/lib/web';
 import { fonts, radius, space, useTheme } from '@/theme';
 
 import { Text } from './Text';
@@ -17,8 +19,9 @@ type Props = TextInputProps & {
 };
 
 /** Champ avec libellé toujours visible au-dessus, aide ou erreur en dessous. */
-export function TextField({ label, helper, error, icon: Icon, prefix, suffix, multiline, style, ...rest }: Props) {
+export function TextField({ label, helper, error, icon: Icon, prefix, suffix, multiline, style, onFocus, onBlur, ...rest }: Props) {
   const { c, status } = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 6 }}>
       <Text variant="label" tone="text" style={{ fontFamily: fonts.semibold, fontSize: 14 }}>
@@ -32,8 +35,8 @@ export function TextField({ label, helper, error, icon: Icon, prefix, suffix, mu
           minHeight: multiline ? 96 : 48,
           paddingHorizontal: space.sm,
           borderRadius: radius.sm,
-          borderWidth: 1,
-          borderColor: error ? status.late.fg : c.border,
+          borderWidth: focused ? 2 : 1,
+          borderColor: error ? status.late.fg : focused ? c.primary : c.border,
           backgroundColor: c.surface,
         }}>
         {Icon ? <Icon size={20} color={c.textMuted} style={{ marginTop: multiline ? space.sm : 0 }} /> : null}
@@ -55,9 +58,18 @@ export function TextField({ label, helper, error, icon: Icon, prefix, suffix, mu
               color: c.text,
               paddingVertical: space.sm,
               textAlignVertical: multiline ? 'top' : 'center',
+              ...noWebOutline,
             },
             style,
           ]}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
           {...rest}
         />
         {suffix ? (
