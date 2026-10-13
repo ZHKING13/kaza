@@ -89,7 +89,8 @@ Le téléphone est l'identifiant principal ; l'e-mail est facultatif.
 **Google / Apple** : vérification du jeton côté serveur (repris d'ack, § 6). Un compte créé ainsi doit **vérifier son numéro par code**
 avant de pouvoir envoyer des quittances (`POST /v1/me/phone/verify`) : le numéro apparaît sur les documents.
 
-**Jetons** : access JWT 15 min (`sub`, `orgId`, `role`), refresh opaque 30 jours haché en base (`Session`), rotation à chaque usage,
+**Jetons** : access JWT ES256 15 min (`sub`, `sessionId`, `jti` ; `orgId` et `role` arriveront avec les organisations),
+refresh opaque `sessionId.secret` haché en base (`Session`), rotation à chaque usage, session glissante de 30 jours,
 réutilisation d'un ancien refresh = révocation de la session.
 
 ## 5. Sécurité et règles d'accès
@@ -129,8 +130,8 @@ L'application est prête côté interfaces :
 
 | Étape | Contenu | Résultat |
 |---|---|---|
-| 1 | Projet NestJS, Prisma, migration `schema.sql`, `packages/domain`, CI (lint, typecheck, tests) | Base qui démarre |
-| 2 | Auth : OTP WhatsApp / SMS, Google, Apple, sessions | Connexion réelle dans l'application |
+| 1 | Projet NestJS, Prisma, migration `schema.sql`, `packages/domain`, CI (lint, typecheck, tests) — **fait** | Base qui démarre |
+| 2 | Auth : OTP WhatsApp / SMS, Google, Apple, sessions — **fait côté API** | Connexion réelle dans l'application (à brancher : `src/lib/auth.ts`) |
 | 3 | Organisation, biens, unités, locataires, baux (entrée avec avance) | Données sauvegardées sur le serveur |
 | 4 | Paiements, annulation, tableau de bord, départ et solde | Parcours complet synchronisé |
 | 5 | Relances et quittances envoyées par WhatsApp (BullMQ) | Moins de gestes pour le bailleur |

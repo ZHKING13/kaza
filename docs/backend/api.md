@@ -10,28 +10,36 @@ Les écritures d'argent acceptent `Idempotency-Key: <uuid>` (rejeu sans doublon)
 Erreurs : `{ "statusCode": 5xxxx, "statusCodeKey": "otpInvalid", "module": "auth", "message": "Code incorrect.", "metadata": {…} }`
 (messages en français, prêts à afficher). Les codes d'erreur ci-dessous correspondent à `statusCodeKey`.
 
-## Authentification (public)
+## Authentification — **implémentée** (`kaza-api`, étape 2)
 
-| Méthode | Route | Corps | Réponse | Écran |
+| Méthode | Route | Corps | Réponse `data` | Écran |
 |---|---|---|---|---|
-| POST | `/auth/otp/send` | `{ phone: "+2250712345678", channel: "whatsapp" \| "sms" }` | `{ resendIn: 30 }` | Connexion |
-| POST | `/auth/otp/verify` | `{ phone, code }` | `Tokens & { isNewUser, user }` | Code |
-| POST | `/auth/google` | `{ idToken }` | `Tokens & { isNewUser, user }` | Connexion |
-| POST | `/auth/apple` | `{ identityToken, firstName?, lastName? }` | `Tokens & { isNewUser, user }` | Connexion (iOS) |
-| POST | `/auth/refresh` | `{ refreshToken }` | `Tokens` | — |
-| POST | `/auth/logout` | — | `204` | Plus › Se déconnecter |
+| POST | `/public/auth/otp/send` | `{ phone: "+2250712345678", channel?: "whatsapp" \| "sms" }` | `{ channel, resendInSeconds: 30, expiresInSeconds: 300 }` | Connexion |
+| POST | `/public/auth/otp/verify` | `{ phone, code, device?: { name?, platform?: "ios" \| "android" \| "web" } }` | `Login` | Code |
+| POST | `/public/auth/social/google` | `{ device? }` + `Authorization: Bearer <id token Google>` | `Login` | Connexion |
+| POST | `/public/auth/social/apple` | `{ firstName?, lastName?, device? }` + `Authorization: Bearer <identity token Apple>` | `Login` | Connexion (iOS) |
+| POST | `/public/auth/refresh` | `{ refreshToken }` | `Tokens` | — |
+| POST | `/user/auth/logout` | — (jeton d'accès) | — | Plus › Se déconnecter |
 
-`Tokens = { accessToken, refreshToken, expiresIn }`
+`Tokens = { tokenType: "Bearer", accessToken, expiresIn: 900, refreshToken, refreshTokenExpiresAt }`
+`Login = Tokens & { isNewUser, user }`
 
-Codes d'erreur : `OTP_INVALID`, `OTP_EXPIRED`, `OTP_TOO_MANY_ATTEMPTS`, `OTP_RATE_LIMITED` (avec `retryAfter`),
-`PHONE_INVALID`, `SOCIAL_TOKEN_INVALID`.
+- Le jeton de rafraîchissement est **à usage unique** : enregistrer le nouveau avant toute autre requête, ne jamais lancer
+  deux rafraîchissements en parallèle. Rejouer un ancien jeton révoque la session (il est considéré comme volé).
+- Après un rafraîchissement, l'ancien jeton d'accès est refusé : rejouer la requête avec le nouveau.
+- La session expire après 30 jours **sans utilisation** (chaque rafraîchissement la prolonge).
+- Code : 30 s entre deux envois, 3 codes par numéro / 10 min, 10 par IP / heure, 5 essais puis blocage 15 min.
+
+Codes d'erreur (`statusCodeKey`) : `otpInvalid` (avec `data.remainingAttempts`), `otpExpired`, `otpTooManyAttempts` et
+`otpRateLimited` (avec `data.retryAfterSeconds`), `phoneInvalid`, `socialGoogleInvalid`, `socialAppleInvalid`,
+`jwtAccessTokenInvalid` (jeton d'accès absent ou expiré : rafraîchir), `forbidden` (session révoquée : reconnecter).
 
 ## Profil et organisation
 
 | Méthode | Route | Corps / paramètres | Réponse | Écran |
 |---|---|---|---|---|
-| GET | `/me` | — | `{ user, organizations: [{ id, name, role }] }` | Démarrage |
-| PATCH | `/me` | `{ firstName, lastName }` | `user` | Onboarding › Profil |
+| GET | `/user/me` | — | `user` (**implémenté** ; `organizations` viendra à l'étape 3) | Démarrage |
+| PATCH | `/user/me` | `{ firstName, lastName }` | `user` (**implémenté**) | Onboarding › Profil |
 | POST | `/me/phone/otp` | `{ phone, channel }` | `{ resendIn }` | Profil (compte Google / Apple) |
 | POST | `/me/phone/verify` | `{ phone, code }` | `user` | idem |
 | POST | `/organizations` | `{ name, countryCode }` | `organization` | fin d'onboarding (créée automatiquement au premier bien si absente) |
