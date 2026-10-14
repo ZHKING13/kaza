@@ -19,6 +19,7 @@ import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { computeSettlement } from '@/data/ledger';
 import { prorataRules, rentForPeriod } from '@/data/prorata';
+import { rentAt, tenantRent } from '@/data/rent';
 import { byMethod, methodOrder, methods } from '@/data/methods';
 import { useStore } from '@/data/store';
 import type { PaymentMethod, Settlement } from '@/data/types';
@@ -51,7 +52,12 @@ export default function DepartLocataire() {
   const unit = units.find((u) => u.id === tenant?.unitId);
   const property = properties.find((p) => p.id === unit?.propertyId);
 
-  const [exitDate, setExitDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString());
+  // Préavis en cours : sa date de départ prévue, si elle est passée
+  const [exitDate, setExitDate] = useState(() => {
+    const noon = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString();
+    const planned = tenant?.notice?.exitDate;
+    return planned && planned < noon ? planned : noon;
+  });
   const [deductArrears, setDeductArrears] = useState(true);
   const [deductions, setDeductions] = useState<Deduction[]>([]);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>('cash');
@@ -64,7 +70,7 @@ export default function DepartLocataire() {
       tenant && unit
         ? computeSettlement({
             tenant,
-            rent: unit.rent,
+            rent: tenantRent(tenant, unit),
             payments,
             exitDate,
             deductArrears,
@@ -180,9 +186,10 @@ export default function DepartLocataire() {
             max={today}
             helper={(() => {
               const p = periodOf(new Date(exitDate));
-              const last = rentForPeriod(unit.rent, p, settings.prorata, tenant.entryDate, exitDate);
+              const schedule = tenantRent(tenant, unit);
+              const last = rentForPeriod(schedule, p, settings.prorata, tenant.entryDate, exitDate);
               return last.partial
-                ? `Dernier mois (${prorataRules[settings.prorata].label.toLowerCase()}, du ${dayLabel(last.fromDay)} au ${last.toDay}) : ${formatAmount(last.amount)} au lieu de ${formatAmount(unit.rent)}.`
+                ? `Dernier mois (${prorataRules[settings.prorata].label.toLowerCase()}, du ${dayLabel(last.fromDay)} au ${last.toDay}) : ${formatAmount(last.amount)} au lieu de ${formatAmount(rentAt(schedule, p))}.`
                 : `Le loyer de ${formatPeriod(p)} est dû en entier (${prorataRules[settings.prorata].label.toLowerCase()}).`;
             })()}
           />

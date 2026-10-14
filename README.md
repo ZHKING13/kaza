@@ -73,6 +73,15 @@ Fonctionnement en mode serveur :
   s'enregistre tout seul (« payé en ligne » dans l'historique, quittance si les messages automatiques sont activés) ;
   la fiche se met à jour d'elle-même tant qu'un lien attend. Liens en attente annulables. Visible si le serveur a un
   agrégateur configuré ; en développement, l'agrégateur de test ouvre une page de paiement simulée.
+- **Cycle de vie du bail** (étape 8) : sur la fiche, une section « Bail » (loyer et révision prévue, fin du contrat,
+  préavis). « Réviser le loyer » : nouveau montant à partir d'un mois (au plus tôt le mois en cours), historique des
+  montants, révision prévue annulable, message WhatsApp au locataire (case cochée par défaut). Les mois passés gardent
+  leur loyer ; la caution du solde de départ reste celle versée à l'entrée. « Fin du contrat et préavis » : date de
+  fin (ou durée indéterminée, prolonger d'un an), préavis du locataire ou du bailleur (départ prévu calculé avec la
+  durée de l'espace, modifiable), retrait du préavis ; le départ reprend la date prévue. Kaza enregistre le préavis
+  sans le signifier au locataire. Accueil : cartes « Fin de contrat proche » (préavis ou fin dans les 60 jours,
+  contrat échu) et « Révision de loyer » (loyer inchangé depuis 12 mois). Paramètres › Préavis et alertes.
+  Propriétaire et gérant ; fonctionne hors ligne (file d'envoi). Durée du contrat choisie à l'ajout du locataire.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
   masqués), quittance produite par le serveur.

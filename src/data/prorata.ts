@@ -1,3 +1,5 @@
+import { type Rent, rentAt } from './rent';
+
 /**
  * Loyer dû pour un mois d'entrée ou de départ incomplet.
  * - full  : mois complet, quel que soit le jour (usage le plus courant)
@@ -25,12 +27,13 @@ export type PeriodRent = {
 const round5 = (n: number) => Math.round(n / 5) * 5;
 
 export function rentForPeriod(
-  rent: number,
+  schedule: Rent,
   period: string,
   rule: ProrataRule,
   entryDate?: string,
   exitDate?: string,
 ): PeriodRent {
+  const rent = rentAt(schedule, period);
   const [y, m] = period.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
   const inMonth = (iso?: string) => {

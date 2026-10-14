@@ -2,6 +2,7 @@ import { api } from '@/lib/api';
 import { periodOf } from '@/lib/format';
 
 import type { ProrataRule } from './prorata';
+import { type LeaseSettings, type NoticeFrom, rentAt, tenantRent } from './rent';
 import type { Payment, PaymentMethod, Property, PropertyType, Settlement, Tenant, Unit } from './types';
 
 /**
@@ -42,6 +43,8 @@ export type ApiOrganization = {
   timeZone: string;
   prorataRule: ProrataRule;
   messaging?: MessagingSettings;
+  /** Préavis par défaut et seuils des alertes de fin de bail et de révision */
+  leases?: LeaseSettings;
   /** Liens de paiement mobile money disponibles (agrégateur configuré sur le serveur) */
   onlinePaymentsEnabled?: boolean;
   role: Role;
@@ -111,7 +114,8 @@ export type TenantMessageKind =
   | 'receipt'
   | 'welcome'
   | 'settlement'
-  | 'payment_link';
+  | 'payment_link'
+  | 'rent_revision';
 export type TenantMessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled';
 
 /** Message envoyé à un locataire par Kaza */
@@ -142,10 +146,14 @@ type ApiLease = {
   id: string;
   unitId: string;
   tenant: { id: string; firstName: string; lastName: string; phone: string };
+  /** Loyer à l'entrée ; les révisions sont dans `rents` */
   rent: number;
+  rents?: { id: string; from: string; amount: number; reason: string | null }[];
   dueDay: number;
   entryDate: string;
   exitDate: string | null;
+  endDate?: string | null;
+  notice?: { from: NoticeFrom; date: string; exitDate: string; reason: string | null } | null;
   depositMonths: number;
   advanceMonths: number;
   settlement: ApiSettlement | null;
@@ -213,8 +221,35 @@ const toPayment = (p: ApiPayment): Payment => ({
 
 export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
   const current = periodOf(today);
-  const active = new Map(s.leases.filter((l) => !l.exitDate).map((l) => [l.unitId, l]));
   const payments = s.payments.map(toPayment);
+  const tenants: Tenant[] = s.leases.map((l) => ({
+    id: l.id,
+    firstName: l.tenant.firstName,
+    lastName: l.tenant.lastName,
+    phone: l.tenant.phone,
+    unitId: l.unitId,
+    dueDay: l.dueDay,
+    depositMonths: l.depositMonths,
+    entryDate: localNoon(l.entryDate),
+    exitDate: l.exitDate ? localNoon(l.exitDate) : undefined,
+    rent: l.rent,
+    rents: (l.rents ?? []).map((r) => ({ id: r.id, from: r.from, amount: r.amount, reason: r.reason ?? undefined })),
+    endDate: l.endDate ? localNoon(l.endDate) : undefined,
+    notice: l.notice
+      ? {
+          from: l.notice.from,
+          date: localNoon(l.notice.date),
+          exitDate: localNoon(l.notice.exitDate),
+          reason: l.notice.reason ?? undefined,
+        }
+      : undefined,
+    settlement: l.settlement ? toSettlement(l.settlement) : undefined,
+    advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
+  }));
+  // Loyer du mois en cours des baux actifs, par unité
+  const active = new Map(
+    tenants.filter((t) => !t.exitDate).map((t) => [t.unitId, rentAt(tenantRent(t, { rent: t.rent ?? 0 }), current)]),
+  );
 
   return {
     organization: s.organization,
@@ -226,23 +261,11 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
       city: p.city,
       description: p.description ?? undefined,
     })),
-    // Le loyer affiché d'une unité louée est celui du bail en cours (comme en mode local)
+    // Le loyer affiché d'une unité louée est celui du bail en cours ce mois-ci (comme en mode local)
     units: s.properties.flatMap((p) =>
-      p.units.map((u) => ({ id: u.id, propertyId: p.id, label: u.label, rent: active.get(u.id)?.rent ?? u.rent })),
+      p.units.map((u) => ({ id: u.id, propertyId: p.id, label: u.label, rent: active.get(u.id) ?? u.rent })),
     ),
-    tenants: s.leases.map((l) => ({
-      id: l.id,
-      firstName: l.tenant.firstName,
-      lastName: l.tenant.lastName,
-      phone: l.tenant.phone,
-      unitId: l.unitId,
-      dueDay: l.dueDay,
-      depositMonths: l.depositMonths,
-      entryDate: localNoon(l.entryDate),
-      exitDate: l.exitDate ? localNoon(l.exitDate) : undefined,
-      settlement: l.settlement ? toSettlement(l.settlement) : undefined,
-      advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
-    })),
+    tenants,
     payments,
   };
 }
@@ -267,8 +290,28 @@ export type LeaseBody = {
   dueDay: number;
   /** "YYYY-MM-DD" */
   entryDate: string;
+  /** "YYYY-MM-DD", facultative */
+  endDate?: string;
   depositMonths: number;
   advance?: { months: number; method: PaymentMethod };
+};
+
+export type RentRevisionBody = {
+  id: string;
+  amount: number;
+  /** "YYYY-MM" */
+  from: string;
+  reason?: string;
+  notifyTenant: boolean;
+  applyToUnit: boolean;
+};
+
+export type NoticeBody = {
+  from: NoticeFrom;
+  /** "YYYY-MM-DD" */
+  date: string;
+  exitDate?: string;
+  reason?: string;
 };
 
 export type DepartureBody = {
@@ -306,7 +349,7 @@ export const remote = {
 
   updateOrganization: (
     orgId: string,
-    body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings> },
+    body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> },
   ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
 
   members: (orgId: string) => api.get<TeamMember[]>(`/user/organizations/${orgId}/members`),
@@ -381,6 +424,21 @@ export const remote = {
         payments: res.payments.map(toPayment),
         voidedPaymentIds: res.voidedPaymentIds,
       })),
+
+  reviseRent: (orgId: string, leaseId: string, body: RentRevisionBody) =>
+    api.post<unknown>(`/user/organizations/${orgId}/leases/${leaseId}/rent-revisions`, body),
+
+  cancelRentRevision: (orgId: string, leaseId: string, revisionId: string) =>
+    api.post<unknown>(`/user/organizations/${orgId}/leases/${leaseId}/rent-revisions/${revisionId}/cancel`, {}),
+
+  setEndDate: (orgId: string, leaseId: string, endDate: string | null) =>
+    api.put<unknown>(`/user/organizations/${orgId}/leases/${leaseId}/end-date`, { endDate }),
+
+  giveNotice: (orgId: string, leaseId: string, body: NoticeBody) =>
+    api.post<unknown>(`/user/organizations/${orgId}/leases/${leaseId}/notice`, body),
+
+  withdrawNotice: (orgId: string, leaseId: string) =>
+    api.post<unknown>(`/user/organizations/${orgId}/leases/${leaseId}/notice/cancel`, {}),
 
   voidPayment: (orgId: string, paymentId: string, reason: string) =>
     api.post<ApiPayment>(`/user/organizations/${orgId}/payments/${paymentId}/void`, { reason }),

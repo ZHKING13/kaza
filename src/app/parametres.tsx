@@ -7,6 +7,7 @@ import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
 import { type ProrataRule, prorataRules, rentForPeriod } from '@/data/prorata';
 import type { MessagingSettings } from '@/data/remote';
+import { defaultLeaseSettings, type LeaseSettings } from '@/data/rent';
 import { usePermissions, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { formatAmount, formatPeriod, periodOf } from '@/lib/format';
@@ -97,6 +98,8 @@ export default function Parametres() {
       <FormError message={error} />
 
       {settings.messaging ? <MessagingSection value={settings.messaging} readOnly={!isOwner} /> : null}
+
+      <LeasesSection value={settings.leases ?? defaultLeaseSettings} readOnly={!isOwner} />
 
       <View style={{ gap: 4, marginTop: space.md }}>
         <Text variant="h3" accessibilityRole="header">
@@ -196,6 +199,59 @@ function MessagingSection({ value, readOnly }: { value: MessagingSettings; readO
         'La quittance en PDF après chaque encaissement, un message de bienvenue à l’entrée et le solde de tout compte au départ.',
         value.autoMessagesEnabled,
         (autoMessagesEnabled) => change({ autoMessagesEnabled }),
+      )}
+      <FormError message={error} />
+    </View>
+  );
+}
+
+/** Préavis par défaut et alertes de l'accueil (« Fin de contrat proche », « Révision de loyer »). */
+function LeasesSection({ value, readOnly }: { value: LeaseSettings; readOnly: boolean }) {
+  const { setSettings } = useStore();
+  const [error, setError] = useState<string>();
+  const change = (leases: Partial<LeaseSettings>) => {
+    if (readOnly) return;
+    setError(undefined);
+    setSettings({ leases: { ...value, ...leases } }).catch((e) => setError(errorMessage(e)));
+  };
+  const chips = <T extends number>(label: string, options: T[], selected: number, text: (n: T) => string, onPick: (n: T) => void) => (
+    <View style={{ gap: space.xs, paddingHorizontal: space.xxs }}>
+      <Text variant="small" tone="muted">
+        {label}
+      </Text>
+      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+        {options.map((n) => (
+          <Chip key={n} label={text(n)} selected={selected === n} onPress={() => onPick(n)} />
+        ))}
+      </View>
+    </View>
+  );
+  const months = (n: number) => (n === 0 ? 'Aucun' : `${n} mois`);
+
+  return (
+    <View style={{ gap: space.sm, marginTop: space.md }}>
+      <View style={{ gap: 4 }}>
+        <Text variant="h3" accessibilityRole="header">
+          Préavis et alertes
+        </Text>
+        <Text variant="small" tone="muted">
+          Durées proposées quand vous enregistrez un préavis (vérifiez celles de votre contrat et de la loi de votre pays),
+          et alertes affichées sur l’accueil.
+        </Text>
+      </View>
+      {chips('Préavis quand le locataire part', [1, 2, 3], value.noticeTenantMonths, months, (n) => change({ noticeTenantMonths: n }))}
+      {chips('Préavis quand le bailleur met fin au bail', [1, 3, 6], value.noticeLandlordMonths, months, (n) =>
+        change({ noticeLandlordMonths: n }),
+      )}
+      {chips('Alerte « Fin de contrat proche »', [30, 60, 90], value.leaseEndAlertDays, (n) => `${n} jours avant`, (n) =>
+        change({ leaseEndAlertDays: n }),
+      )}
+      {chips(
+        'Alerte « Révision de loyer »',
+        [0, 12, 24, 36],
+        value.rentRevisionAlertMonths,
+        (n) => (n === 0 ? 'Désactivée' : `Après ${n / 12} an${n > 12 ? 's' : ''} sans changement`),
+        (n) => change({ rentRevisionAlertMonths: n }),
       )}
       <FormError message={error} />
     </View>

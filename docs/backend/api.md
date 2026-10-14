@@ -102,6 +102,7 @@ Corps de `POST …/leases` (une seule transaction : locataire, bail, paiements d
   "rent": 85000,
   "dueDay": 5,
   "entryDate": "2026-10-20",
+  "endDate": "2027-10-19",
   "depositMonths": 2,
   "advance": { "months": 3, "method": "wave" }
 }
@@ -116,6 +117,31 @@ avec `status` ∈ `paid | partial | late | upcoming` pour la période demandée 
 calculé par `periodRentStatus` de `@zhking13/kaza-domain` 0.2.0 : en retard **le lendemain** de l'échéance.
 
 Erreurs : `unitNotVacant` (409), `unitNotFound`, `notFound` (404), `tenantPhoneInvalid` (422).
+
+### Révision du loyer, fin du contrat, préavis (étape 8)
+
+Réservé au propriétaire et au gérant ; chaque route renvoie la fiche (`LeaseSummary & { payments, balance }`).
+
+| Méthode | Route | Corps | Écran |
+|---|---|---|---|
+| POST | `…/leases/:id/rent-revisions` | `{ id?, amount, from: "YYYY-MM", reason?, notifyTenant = true, applyToUnit = true }` | Réviser le loyer |
+| POST | `…/leases/:id/rent-revisions/:revisionId/cancel` | — | Réviser le loyer › Annuler |
+| PUT | `…/leases/:id/end-date` | `{ endDate: "YYYY-MM-DD" \| null }` | Fin du contrat et préavis |
+| POST | `…/leases/:id/notice` | `{ from: tenant\|landlord, date, exitDate?, reason? }` | Fin du contrat et préavis |
+| POST | `…/leases/:id/notice/cancel` | — | Retirer le préavis |
+
+- Le loyer d'un mois se lit sur l'échéancier (loyer d'entrée puis révisions) : `rentAt` de `@zhking13/kaza-domain` 0.4.0.
+  Une révision commence au plus tôt le mois en cours, après le mois d'entrée (`revisionInPast`, 422) ; les mois passés
+  ne changent jamais. Une révision qui ne porte pas sur un mois passé peut être retirée (`revisionNotFound` sinon).
+- `exitDate` du préavis : par défaut la date du préavis plus la durée de l'espace (`leases.noticeTenantMonths` /
+  `noticeLandlordMonths`) ; `noticeDatesInvalid` (422) si le préavis précède l'entrée ou le départ précède le préavis.
+- `LeaseSummary` ajoute `rentHistory: [{ id, from, amount, reason, createdAt }]` (le premier, `id: null`, est le loyer
+  d'entrée), `endDate`, `notice: { from, date, exitDate, reason } | null`, `end: { kind: notice | contract_end |
+  contract_expired, date, daysLeft } | null` et `revisionDue`. `rent` est le loyer du mois de la situation.
+- Snapshot : `leases[].rent` est le loyer d'entrée, `leases[].rents` les révisions, plus `endDate` et `notice`.
+- Réglages de l'espace : `PATCH …/organizations/:id` avec `leases: { noticeTenantMonths, noticeLandlordMonths,
+  leaseEndAlertDays, rentRevisionAlertMonths }`.
+- Le solde de départ retient la caution versée à l'entrée (`depositAmount`), pas `depositMonths` × loyer révisé.
 
 ### Départ et solde de tout compte
 

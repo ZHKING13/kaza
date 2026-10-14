@@ -1,14 +1,17 @@
 import { ApiError } from '@/lib/api';
 
 import type { ProrataRule } from './prorata';
+import type { LeaseSettings } from './rent';
 import {
   type ApiOrganization,
   type DepartureBody,
   type LeaseBody,
   type MessagingSettings,
+  type NoticeBody,
   type PaymentBody,
   type PropertyBody,
   remote,
+  type RentRevisionBody,
   type UnitBody,
 } from './remote';
 import type { Payment, Settlement } from './types';
@@ -27,7 +30,7 @@ export type OutboxOp =
   | {
       kind: 'updateOrganization';
       orgId: string;
-      body: { prorataRule?: ProrataRule; messaging?: Partial<MessagingSettings> };
+      body: { prorataRule?: ProrataRule; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> };
     }
   | { kind: 'createProperty'; orgId: string; body: PropertyBody }
   | { kind: 'addUnits'; orgId: string; propertyId: string; units: UnitBody[] }
@@ -36,7 +39,12 @@ export type OutboxOp =
   | { kind: 'createPayment'; orgId: string; body: PaymentBody }
   | { kind: 'voidPayment'; orgId: string; paymentId: string; reason: string }
   /** `localPaymentIds` : retenues sur caution calculées sur le téléphone, remplacées par celles du serveur */
-  | { kind: 'recordDeparture'; orgId: string; leaseId: string; body: DepartureBody; localPaymentIds: string[] };
+  | { kind: 'recordDeparture'; orgId: string; leaseId: string; body: DepartureBody; localPaymentIds: string[] }
+  | { kind: 'reviseRent'; orgId: string; leaseId: string; body: RentRevisionBody }
+  | { kind: 'cancelRentRevision'; orgId: string; leaseId: string; revisionId: string }
+  | { kind: 'setEndDate'; orgId: string; leaseId: string; endDate: string | null }
+  | { kind: 'giveNotice'; orgId: string; leaseId: string; body: NoticeBody }
+  | { kind: 'withdrawNotice'; orgId: string; leaseId: string };
 
 export type OutboxEntry = OutboxOp & {
   /** Clé Idempotency-Key, identique à chaque tentative */
@@ -95,6 +103,21 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       const res = await remote.departure(entry.orgId, entry.leaseId, entry.body);
       return { kind: 'departure', leaseId: entry.leaseId, localPaymentIds: entry.localPaymentIds, ...res };
     }
+    case 'reviseRent':
+      await remote.reviseRent(entry.orgId, entry.leaseId, entry.body);
+      return { kind: 'done' };
+    case 'cancelRentRevision':
+      await remote.cancelRentRevision(entry.orgId, entry.leaseId, entry.revisionId);
+      return { kind: 'done' };
+    case 'setEndDate':
+      await remote.setEndDate(entry.orgId, entry.leaseId, entry.endDate);
+      return { kind: 'done' };
+    case 'giveNotice':
+      await remote.giveNotice(entry.orgId, entry.leaseId, entry.body);
+      return { kind: 'done' };
+    case 'withdrawNotice':
+      await remote.withdrawNotice(entry.orgId, entry.leaseId);
+      return { kind: 'done' };
   }
 }
 

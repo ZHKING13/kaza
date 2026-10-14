@@ -65,6 +65,19 @@ export const tenants: Tenant[] = [
   t('t17', 'Boutique', 'Chez Tanti', '+2250511223344', 'l18', 10),
 ];
 
+/** Démo : quelques baux datés, pour montrer les alertes de fin de contrat et de révision. */
+export function demoTenants(today: Date): Tenant[] {
+  const at = (months: number, days = 0) =>
+    new Date(today.getFullYear(), today.getMonth() + months, today.getDate() + days, 12).toISOString();
+  return tenants.map((x) => {
+    if (x.id === 't2') return { ...x, entryDate: at(-26) };
+    if (x.id === 't3') return { ...x, entryDate: at(-11, -20), endDate: at(1, 10) };
+    if (x.id === 't6')
+      return { ...x, entryDate: at(-8), notice: { from: 'tenant' as const, date: at(0, -5), exitDate: at(1, -5), reason: 'Mutation' } };
+    return x;
+  });
+}
+
 function day(base: Date, monthOffset: number, d: number): string {
   return new Date(base.getFullYear(), base.getMonth() + monthOffset, d, 10, 30).toISOString();
 }

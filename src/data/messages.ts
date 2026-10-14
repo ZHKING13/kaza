@@ -20,6 +20,7 @@ export const messageKindLabels: Record<TenantMessageKind, string> = {
   welcome: 'Message de bienvenue',
   settlement: 'Solde de tout compte',
   payment_link: 'Lien de paiement',
+  rent_revision: 'Révision du loyer',
 };
 
 export const messageStatusLabels: Record<TenantMessageStatus, string> = {
