@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Building2, DoorOpen, Plus, UserPlus, UserRound } from 'lucide-react-native';
+import { ArrowLeft, Building2, Camera, DoorOpen, Plus, UserPlus, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { methods } from '@/data/methods';
 import { propertyTypes } from '@/data/propertyTypes';
 import { usePermissions, usePropertySummaries, useStore } from '@/data/store';
 import { formatAmount, formatDate, formatNumber } from '@/lib/format';
+import { pickImage } from '@/lib/images';
 import { elevation, fonts, radius, space, useTheme } from '@/theme';
 
 type Tab = 'unites' | 'locataires' | 'historique';
@@ -53,10 +54,20 @@ export default function BienDetail() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { payments } = useStore();
+  const { payments, setPropertyPhoto } = useStore();
   const { canManage, canCollect } = usePermissions();
   const s = usePropertySummaries().find((x) => x.property.id === id);
   const [tab, setTab] = useState<Tab>('unites');
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  const changePhoto = async () => {
+    const uri = await pickImage({ maxSide: 1600, format: 'jpeg', aspect: [16, 9] });
+    if (!uri) return;
+    setPhotoBusy(true);
+    // Échec d'envoi refusé par le serveur : la photo reste affichée jusqu'à la prochaine synchronisation
+    await setPropertyPhoto(id, uri).catch(() => {});
+    setPhotoBusy(false);
+  };
 
   if (!s) {
     return (
@@ -94,6 +105,29 @@ export default function BienDetail() {
               })}>
               <ArrowLeft size={22} color={hasPhoto ? '#FFFFFF' : c.text} />
             </Pressable>
+            {canManage ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={hasPhoto ? 'Changer la photo' : 'Ajouter une photo'}
+                onPress={changePhoto}
+                style={({ pressed }) => ({
+                  position: 'absolute',
+                  top: insets.top + space.xs,
+                  right: space.md,
+                  height: 44,
+                  paddingHorizontal: space.sm,
+                  borderRadius: radius.full,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: hasPhoto ? 'rgba(15,23,42,0.45)' : pressed ? c.surfaceAlt : c.surface,
+                })}>
+                <Camera size={18} color={hasPhoto ? '#FFFFFF' : c.text} />
+                <Text variant="small" color={hasPhoto ? '#FFFFFF' : c.text}>
+                  {photoBusy ? 'Envoi…' : hasPhoto ? 'Changer la photo' : 'Ajouter une photo'}
+                </Text>
+              </Pressable>
+            ) : null}
             <View style={{ flex: 1 }} />
             <View style={{ gap: 4 }}>
               <View

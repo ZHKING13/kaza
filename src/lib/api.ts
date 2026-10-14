@@ -46,7 +46,8 @@ async function send<T>(method: string, path: string, { body, auth, idempotencyKe
     'x-api-key': apiConfig.key,
     'x-custom-lang': 'fr',
   };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json';
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const access = tokens.getAccess();
   if (auth && access) headers.Authorization = `Bearer ${access}`;
@@ -56,7 +57,7 @@ async function send<T>(method: string, path: string, { body, auth, idempotencyKe
     res = await fetch(`${apiConfig.url}/api/v1${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? (body as FormData) : JSON.stringify(body),
     });
   } catch {
     throw new ApiError('Pas de connexion. Vérifiez internet et réessayez.', 'network', 0);
@@ -134,6 +135,9 @@ export const api = {
     request<T>('POST', path, { ...options, body, auth: options?.auth ?? true }),
   patch: <T>(path: string, body: unknown, options?: RequestOptions) =>
     request<T>('PATCH', path, { ...options, body, auth: options?.auth ?? true }),
+  /** Envoi d'un fichier (multipart/form-data) */
+  upload: <T>(method: 'PUT' | 'POST', path: string, form: FormData) =>
+    request<T>(method, path, { body: form, auth: true }),
   put: <T>(path: string, body: unknown, options?: RequestOptions) =>
     request<T>('PUT', path, { ...options, body, auth: options?.auth ?? true }),
   delete: <T>(path: string, options?: RequestOptions) => request<T>('DELETE', path, { ...options, auth: options?.auth ?? true }),

@@ -143,6 +143,7 @@ Reste : départ et solde côté serveur, photos (stockage objet), connexion Goog
 | 6 | Mobile money : liens de paiement, interface commune d'agrégateur, rapprochement (webhook et passage régulier) — **fait** avec un agrégateur de test ; reste à brancher l'agrégateur choisi et les reversements | Paiement par lien |
 | 7 | Gérants et agences : invitations par numéro, rôles, plusieurs espaces par compte, journal d'activité — **fait** (modèle WhatsApp `kaza_invitation` à faire approuver) | Offre Pro / Agence |
 | 8 | Cycle de vie du bail : loyer daté et révisions (domaine 0.4.0), date de fin, préavis, alertes « Fin de contrat proche » et « Révision de loyer » — **fait** (modèle WhatsApp `kaza_rent_revision` à faire approuver) | Baux suivis jusqu'au départ |
+| 9 | Identité de l'espace et images : stockage (disque local / S3 privé, liens signés), quittances personnalisées (logo, couleur, mentions, cachet), photos des biens envoyées au serveur — **fait** | Offre agences |
 
 Tests à écrire en priorité : règles de `packages/domain` (prorata, solde de départ), contraintes d'accès par organisation,
 idempotence des paiements, rejeu de webhook.

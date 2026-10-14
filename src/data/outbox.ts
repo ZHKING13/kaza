@@ -5,6 +5,8 @@ import type { LeaseSettings } from './rent';
 import {
   type ApiOrganization,
   type DepartureBody,
+  type IdentityFields,
+  type ImageTarget,
   type LeaseBody,
   type MessagingSettings,
   type NoticeBody,
@@ -44,7 +46,11 @@ export type OutboxOp =
   | { kind: 'cancelRentRevision'; orgId: string; leaseId: string; revisionId: string }
   | { kind: 'setEndDate'; orgId: string; leaseId: string; endDate: string | null }
   | { kind: 'giveNotice'; orgId: string; leaseId: string; body: NoticeBody }
-  | { kind: 'withdrawNotice'; orgId: string; leaseId: string };
+  | { kind: 'withdrawNotice'; orgId: string; leaseId: string }
+  | { kind: 'updateIdentity'; orgId: string; body: Partial<IdentityFields> }
+  /** `uri` : image compressée (data URI) ou fichier local */
+  | { kind: 'putImage'; orgId: string; target: ImageTarget; propertyId?: string; uri: string }
+  | { kind: 'deleteImage'; orgId: string; target: ImageTarget; propertyId?: string };
 
 export type OutboxEntry = OutboxOp & {
   /** Clé Idempotency-Key, identique à chaque tentative */
@@ -117,6 +123,15 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       return { kind: 'done' };
     case 'withdrawNotice':
       await remote.withdrawNotice(entry.orgId, entry.leaseId);
+      return { kind: 'done' };
+    case 'updateIdentity':
+      await remote.updateIdentity(entry.orgId, entry.body);
+      return { kind: 'done' };
+    case 'putImage':
+      await remote.putImage(entry.orgId, entry.target, entry.uri, entry.propertyId);
+      return { kind: 'done' };
+    case 'deleteImage':
+      await remote.deleteImage(entry.orgId, entry.target, entry.propertyId);
       return { kind: 'done' };
   }
 }

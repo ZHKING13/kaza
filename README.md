@@ -82,9 +82,16 @@ Fonctionnement en mode serveur :
   sans le signifier au locataire. Accueil : cartes « Fin de contrat proche » (préavis ou fin dans les 60 jours,
   contrat échu) et « Révision de loyer » (loyer inchangé depuis 12 mois). Paramètres › Préavis et alertes.
   Propriétaire et gérant ; fonctionne hors ligne (file d'envoi). Durée du contrat choisie à l'ajout du locataire.
+- **Identité et quittances** (étape 9) : Plus › Identité et quittances (propriétaire ; les autres rôles consultent).
+  Raison sociale, adresse, téléphone et e-mail affichés, RCCM, numéro fiscal, couleur (8 au choix), logo, signature
+  ou cachet (image), phrase en pied de quittance, avec un aperçu en direct et une quittance d'exemple en PDF. La
+  quittance, le reçu partiel et le solde de tout compte de l'application, ainsi que le PDF envoyé par WhatsApp, prennent
+  cette identité ; sans réglage, ils restent comme avant. Logo et cachet sont gardés sur le téléphone (quittances hors ligne).
+- **Photos des biens** : réduites et compressées sur le téléphone, envoyées au serveur (file d'envoi hors ligne),
+  visibles par toute l'équipe et sur un autre téléphone ; « Changer la photo » sur la fiche du bien (propriétaire,
+  gérant). Les photos prises avant cette version sont envoyées à la prochaine connexion.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
-- **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
-  masqués), quittance produite par le serveur.
+- **Pas encore** en mode serveur : connexion Google / Apple (boutons masqués).
 
 ## Lancer l'application
 

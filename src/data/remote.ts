@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { imageForm } from '@/lib/images';
 import { periodOf } from '@/lib/format';
 
 import type { ProrataRule } from './prorata';
@@ -49,6 +50,24 @@ export type ApiOrganization = {
   onlinePaymentsEnabled?: boolean;
   role: Role;
 };
+
+/** Identité imprimée sur les quittances (toutes facultatives) */
+export type IdentityFields = {
+  legalName: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  registrationNumber: string | null;
+  taxId: string | null;
+  /** Clé de la palette (`brandColors`) */
+  brandColor: string;
+  receiptFooter: string | null;
+};
+
+/** Identité telle que le serveur la renvoie : liens signés vers le logo et le cachet (temporaires) */
+export type ApiIdentity = IdentityFields & { logoUrl: string | null; stampUrl: string | null };
+
+export type ImageTarget = 'logo' | 'stamp' | 'property';
 
 /** Membre d'un espace */
 export type TeamMember = {
@@ -182,6 +201,7 @@ export const toSettlement = (s: ApiSettlement): Settlement => ({
 
 type ApiSnapshot = {
   organization: ApiOrganization;
+  identity?: ApiIdentity;
   properties: {
     id: string;
     name: string;
@@ -189,6 +209,7 @@ type ApiSnapshot = {
     district: string;
     city: string;
     description: string | null;
+    photoUrl?: string | null;
     units: { id: string; label: string; rent: number }[];
   }[];
   leases: ApiLease[];
@@ -197,6 +218,7 @@ type ApiSnapshot = {
 
 export type RemoteData = {
   organization: ApiOrganization;
+  identity: ApiIdentity | null;
   properties: Property[];
   units: Unit[];
   tenants: Tenant[];
@@ -253,6 +275,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
 
   return {
     organization: s.organization,
+    identity: s.identity ?? null,
     properties: s.properties.map((p) => ({
       id: p.id,
       name: p.name,
@@ -260,6 +283,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
       district: p.district,
       city: p.city,
       description: p.description ?? undefined,
+      photo: p.photoUrl ?? undefined,
     })),
     // Le loyer affiché d'une unité louée est celui du bail en cours ce mois-ci (comme en mode local)
     units: s.properties.flatMap((p) =>
@@ -351,6 +375,28 @@ export const remote = {
     orgId: string,
     body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> },
   ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+
+  identity: (orgId: string) => api.get<ApiIdentity>(`/user/organizations/${orgId}/identity`),
+
+  updateIdentity: (orgId: string, body: Partial<IdentityFields>) =>
+    api.patch<ApiIdentity>(`/user/organizations/${orgId}/identity`, body),
+
+  /** Logo, cachet ou photo d'un bien ; `uri` : data URI ou fichier local */
+  putImage: async (orgId: string, target: ImageTarget, uri: string, propertyId?: string) =>
+    api.upload<ApiIdentity | { photoUrl: string | null }>(
+      'PUT',
+      target === 'property'
+        ? `/user/organizations/${orgId}/properties/${propertyId}/photo`
+        : `/user/organizations/${orgId}/identity/${target}`,
+      await imageForm(uri, target),
+    ),
+
+  deleteImage: (orgId: string, target: ImageTarget, propertyId?: string) =>
+    api.delete<ApiIdentity | { photoUrl: string | null }>(
+      target === 'property'
+        ? `/user/organizations/${orgId}/properties/${propertyId}/photo`
+        : `/user/organizations/${orgId}/identity/${target}`,
+    ),
 
   members: (orgId: string) => api.get<TeamMember[]>(`/user/organizations/${orgId}/members`),
 
