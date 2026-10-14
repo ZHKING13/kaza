@@ -42,6 +42,8 @@ export type ApiOrganization = {
   timeZone: string;
   prorataRule: ProrataRule;
   messaging?: MessagingSettings;
+  /** Liens de paiement mobile money disponibles (agrégateur configuré sur le serveur) */
+  onlinePaymentsEnabled?: boolean;
   role: Role;
 };
 
@@ -75,6 +77,21 @@ export type ReceivedInvitation = {
   invitedBy: { id: string; name: string } | null;
 };
 
+/** Lien de paiement mobile money envoyé au locataire */
+export type PaymentRequest = {
+  id: string;
+  leaseId: string;
+  period: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled';
+  link: string;
+  paymentId: string | null;
+  expiresAt: string;
+  paidAt: string | null;
+  createdAt: string;
+};
+
 /** Ligne du journal d'activité */
 export type ActivityEntry = {
   id: string;
@@ -87,7 +104,14 @@ export type ActivityEntry = {
   createdAt: string;
 };
 
-export type TenantMessageKind = 'rent_due_soon' | 'rent_late' | 'rent_manual' | 'receipt' | 'welcome' | 'settlement';
+export type TenantMessageKind =
+  | 'rent_due_soon'
+  | 'rent_late'
+  | 'rent_manual'
+  | 'receipt'
+  | 'welcome'
+  | 'settlement'
+  | 'payment_link';
 export type TenantMessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled';
 
 /** Message envoyé à un locataire par Kaza */
@@ -111,6 +135,7 @@ type ApiPayment = {
   method: PaymentMethod;
   period: string;
   receivedAt: string;
+  source?: 'manual' | 'mobile_money' | 'settlement';
 };
 
 type ApiLease = {
@@ -183,6 +208,7 @@ const toPayment = (p: ApiPayment): Payment => ({
   method: p.method,
   date: p.receivedAt,
   period: p.period,
+  ...(p.source === 'mobile_money' ? { online: true } : {}),
 });
 
 export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
@@ -308,6 +334,15 @@ export const remote = {
     api.get<{ items: ActivityEntry[]; nextCursor: string | null }>(
       `/user/organizations/${orgId}/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
     ),
+
+  createPaymentRequest: (orgId: string, leaseId: string, body: { period?: string; amount?: number; send?: boolean }) =>
+    api.post<PaymentRequest>(`/user/organizations/${orgId}/leases/${leaseId}/payment-requests`, body),
+
+  paymentRequests: (orgId: string, leaseId: string) =>
+    api.get<PaymentRequest[]>(`/user/organizations/${orgId}/leases/${leaseId}/payment-requests`),
+
+  cancelPaymentRequest: (orgId: string, id: string) =>
+    api.post<PaymentRequest>(`/user/organizations/${orgId}/payment-requests/${id}/cancel`, {}),
 
   messages: (orgId: string, leaseId: string) =>
     api.get<TenantMessage[]>(`/user/organizations/${orgId}/leases/${leaseId}/messages`),

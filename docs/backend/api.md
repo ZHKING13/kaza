@@ -193,6 +193,25 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
 - Rôles : propriétaire, gérant et collecteur peuvent envoyer ; seul le propriétaire change les réglages.
 - Hors ligne, l'application n'envoie rien plus tard : une relance partie des heures après surprendrait le locataire.
 
+## Paiement en ligne — **implémenté** (étape 6, agrégateur à choisir)
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| POST | `…/leases/:id/payment-requests` | `{ period?, amount?, send = true }` | `PaymentRequest` | propriétaire, gérant, collecteur | Fiche › Envoyer un lien de paiement |
+| GET | `…/leases/:id/payment-requests` | — | `[PaymentRequest]` | tous | Fiche › Paiement en ligne |
+| POST | `…/payment-requests/:id/cancel` | — | `PaymentRequest` | propriétaire, gérant, collecteur | Fiche › Annuler |
+| GET | `/public/pay/:id` | — | redirection vers l'agrégateur, ou page « payé » / « plus valable » | locataire | — |
+| POST | `/public/webhooks/payments/:gateway` | notification de l'agrégateur (signée) | — | agrégateur | — |
+
+`PaymentRequest = { id, leaseId, period, amount, currency, status, link, paymentId, expiresAt, paidAt, createdAt }`,
+`status` ∈ `pending | paid | failed | expired | cancelled`. L'espace porte `onlinePaymentsEnabled`.
+
+- Par défaut, le lien porte sur le reste dû du mois en cours ; le lien en attente pour le même mois et le même montant
+  est réutilisé ; valable 3 jours. Message WhatsApp `kaza_payment_link`.
+- Le paiement confirmé devient un `Payment` avec `source: "mobile_money"` (dans le snapshot) ; l'application l'affiche
+  « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
+- Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
+
 ## Équipe et journal d'activité — **implémentés** (étape 7)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |

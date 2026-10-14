@@ -140,7 +140,7 @@ Reste : départ et solde côté serveur, photos (stockage objet), connexion Goog
 | 3 | Organisation, biens, unités, locataires, baux (entrée avec avance), file d'envoi hors ligne — **fait** (photos : à faire) | Données sauvegardées sur le serveur |
 | 4 | Paiements, annulation, tableau de bord, départ et solde — **fait** | Parcours complet synchronisé |
 | 5 | Relances, quittances PDF, bienvenue et solde envoyés par WhatsApp (BullMQ, repli SMS) — **fait** (modèles WhatsApp à faire approuver par Meta) | Moins de gestes pour le bailleur |
-| 6 | Mobile money (agrégateur, webhooks, rapprochement) | Paiement par lien |
+| 6 | Mobile money : liens de paiement, interface commune d'agrégateur, rapprochement (webhook et passage régulier) — **fait** avec un agrégateur de test ; reste à brancher l'agrégateur choisi et les reversements | Paiement par lien |
 | 7 | Gérants et agences : invitations par numéro, rôles, plusieurs espaces par compte, journal d'activité — **fait** (modèle WhatsApp `kaza_invitation` à faire approuver) | Offre Pro / Agence |
 
 Tests à écrire en priorité : règles de `packages/domain` (prorata, solde de départ), contraintes d'accès par organisation,

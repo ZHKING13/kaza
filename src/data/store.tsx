@@ -34,6 +34,8 @@ export type Settings = {
   prorata: ProrataRule;
   /** Messages envoyés par le serveur aux locataires (compte en ligne seulement) */
   messaging?: MessagingSettings;
+  /** Liens de paiement mobile money disponibles sur le serveur */
+  onlinePayments?: boolean;
 };
 
 /** Le bailleur : son nom figure sur les quittances. */
@@ -218,6 +220,7 @@ function reducer(state: State, action: Action): State {
           ...state.settings,
           prorata: action.data.organization.prorataRule,
           messaging: action.data.organization.messaging,
+          onlinePayments: action.data.organization.onlinePaymentsEnabled ?? false,
         },
         properties: action.data.properties.map((p) => ({ ...p, photo: photos.get(p.id) })),
         units: action.data.units,
@@ -448,7 +451,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (result.kind === 'organization') {
       dispatch({ type: 'upsertOrganization', organization: toSummary(result.organization) });
       // Réglages des messages tels que le serveur les a enregistrés
-      if (result.organization.messaging) dispatch({ type: 'setSettings', settings: { messaging: result.organization.messaging } });
+      dispatch({
+        type: 'setSettings',
+        settings: {
+          ...(result.organization.messaging ? { messaging: result.organization.messaging } : {}),
+          onlinePayments: result.organization.onlinePaymentsEnabled ?? false,
+        },
+      });
     }
     if (result.kind === 'lease') {
       dispatch({ type: 'replaceLeasePayments', leaseId: result.leaseId, removeIds: result.localPaymentIds, payments: result.payments });

@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { KazaMessages } from '@/components/KazaMessages';
+import { OnlinePayment } from '@/components/OnlinePayment';
 import { MethodDot } from '@/components/MethodDot';
 import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
@@ -74,6 +75,7 @@ function History({ items }: { items: Payment[] }) {
                 </Text>
                 <Text variant="small" tone="muted">
                   {formatDate(p.date)} · {methods[p.method].label}
+                  {p.online ? ' · payé en ligne' : ''}
                 </Text>
               </View>
               <Amount value={p.amount} currency={false} />
@@ -229,6 +231,8 @@ export default function LocataireDetail() {
             </Text>
           </Fact>
         </Card>
+
+        <OnlinePayment leaseId={tenant.id} remaining={remaining} canSend={canCollect} />
 
         <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0 && canCollect} />
 

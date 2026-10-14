@@ -28,6 +28,14 @@ export function describeActivity(e: ActivityEntry): string {
       const method = typeof d.method === 'string' && d.method in methods ? ` (${methods[d.method as PaymentMethod].label})` : '';
       return `${who} a encaissé ${amount}${method} — ${subject}, ${period}`;
     }
+    case 'payment.received': {
+      const method = typeof d.method === 'string' && d.method in methods ? ` par ${methods[d.method as PaymentMethod].label}` : '';
+      return `${subject} a payé ${amount} en ligne${method} — ${period}`;
+    }
+    case 'payment_request.created':
+      return `${who} a envoyé un lien de paiement de ${amount} — ${subject}, ${period}`;
+    case 'payment_request.cancelled':
+      return `${who} a annulé un lien de paiement de ${amount} — ${subject}, ${period}`;
     case 'payment.voided':
       return `${who} a annulé un paiement de ${amount} — ${subject}, ${period}${typeof d.reason === 'string' ? ` (« ${d.reason} »)` : ''}`;
     case 'lease.created':
