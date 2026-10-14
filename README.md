@@ -68,6 +68,11 @@ Fonctionnement en mode serveur :
 - **Plusieurs espaces** : son propre espace et ceux où l'on a été invité ; changement dans l'onglet Plus (refusé tant
   que des enregistrements hors ligne attendent d'être envoyés). Rôles et invitations sont relus à l'ouverture de
   l'application : un membre retiré quitte l'espace sur son téléphone.
+- **Paiement en ligne** (étape 6) : sur la fiche locataire, « Envoyer un lien de paiement » (le reste du mois) part
+  sur le WhatsApp du locataire, qui paie par Wave, Orange Money, MTN ou Moov chez l'agrégateur. Le paiement
+  s'enregistre tout seul (« payé en ligne » dans l'historique, quittance si les messages automatiques sont activés) ;
+  la fiche se met à jour d'elle-même tant qu'un lien attend. Liens en attente annulables. Visible si le serveur a un
+  agrégateur configuré ; en développement, l'agrégateur de test ouvre une page de paiement simulée.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
   masqués), quittance produite par le serveur.

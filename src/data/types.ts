@@ -64,6 +64,8 @@ export type Payment = {
   date: string;
   /** Mois couvert, "YYYY-MM" */
   period: string;
+  /** Payé en ligne par le locataire (lien de paiement mobile money) */
+  online?: boolean;
 };
 
 export type TenantSummary = {

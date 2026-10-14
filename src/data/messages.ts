@@ -19,6 +19,7 @@ export const messageKindLabels: Record<TenantMessageKind, string> = {
   receipt: 'Quittance',
   welcome: 'Message de bienvenue',
   settlement: 'Solde de tout compte',
+  payment_link: 'Lien de paiement',
 };
 
 export const messageStatusLabels: Record<TenantMessageStatus, string> = {
@@ -34,6 +35,13 @@ export const messageStatusLabels: Record<TenantMessageStatus, string> = {
 export function useServerMessaging(): { enabled: boolean; organizationId: string | null } {
   const { remote: isRemote, organizationId } = useStore();
   return { enabled: isRemote && isApiConfigured && !!organizationId, organizationId };
+}
+
+/** Un autre écran vient de faire envoyer un message (lien de paiement…) : les listes se rechargent. */
+const listeners = new Set<() => void>();
+export function notifyMessagesChanged(): void {
+  // Le message part par la file du serveur : on laisse le temps de l'envoyer
+  setTimeout(() => listeners.forEach((l) => l()), 1500);
 }
 
 export function useTenantMessages(leaseId: string | undefined) {
@@ -53,6 +61,11 @@ export function useTenantMessages(leaseId: string | undefined) {
 
   useEffect(() => {
     void reload();
+    const listener = () => void reload();
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
   }, [reload]);
 
   return { enabled, messages, error, reload };
