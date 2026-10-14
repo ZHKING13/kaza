@@ -15,7 +15,7 @@ import { useServerMessaging } from '@/data/messages';
 import { remote } from '@/data/remote';
 import { Text } from '@/components/Text';
 import { useReceipt } from '@/data/documents';
-import { useStore } from '@/data/store';
+import { usePermissions, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { methods } from '@/data/methods';
 import { receiptNumber } from '@/lib/documents';
@@ -93,6 +93,7 @@ function VoidPayment({ paymentId }: { paymentId: string }) {
 /** Aperçu de la quittance (ou du reçu partiel) d'un paiement, avec partage en PDF. */
 export default function Quittance() {
   const { c, status } = useTheme();
+  const { canManage } = usePermissions();
   const { id } = useLocalSearchParams<{ id: string }>();
   const r = useReceipt(id);
 
@@ -146,7 +147,7 @@ export default function Quittance() {
       <PdfButton label={full ? 'Partager la quittance (PDF)' : 'Partager le reçu (PDF)'} html={r.html} fileName={r.fileName} variant="primary" />
       <Button label="Envoyer un message WhatsApp" icon={MessageCircle} variant="secondary" onPress={() => openWhatsApp(tenant.phone, text)} />
       {/* Les retenues sur caution font partie du solde de départ : pas d'annulation */}
-      {payment.method !== 'caution' && !tenant.exitDate ? <VoidPayment paymentId={payment.id} /> : null}
+      {canManage && payment.method !== 'caution' && !tenant.exitDate ? <VoidPayment paymentId={payment.id} /> : null}
     </ScrollView>
   );
 }
@@ -154,7 +155,8 @@ export default function Quittance() {
 /** Compte en ligne : Kaza envoie le PDF sur le WhatsApp du locataire (repli SMS, texte seul). */
 function SendReceiptByKaza({ paymentId, full, disabled }: { paymentId: string; full: boolean; disabled: boolean }) {
   const { enabled, organizationId } = useServerMessaging();
-  if (!enabled || !organizationId || disabled) return null;
+  const { canCollect } = usePermissions();
+  if (!enabled || !organizationId || disabled || !canCollect) return null;
   return (
     <KazaSendButton
       label={full ? 'Envoyer la quittance par Kaza' : 'Envoyer le reçu par Kaza'}

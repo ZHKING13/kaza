@@ -1,4 +1,5 @@
 import { Bell, CircleAlert, DoorOpen, Send } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { Amount } from '@/components/Amount';
@@ -14,7 +15,7 @@ import { StartChecklist } from '@/components/StartChecklist';
 import { createAccountFromDemo } from '@/lib/demo';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
-import { useMonthTotals, useStore, useTenantSummaries } from '@/data/store';
+import { useMonthTotals, usePermissions, useStore, useTenantSummaries } from '@/data/store';
 import { formatAmount, formatNumber, formatPeriod } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
@@ -24,7 +25,9 @@ function greeting(d: Date) {
 
 export default function Accueil() {
   const { c, status } = useTheme();
-  const { payments, today, period, profile, mode, signOut } = useStore();
+  const { payments, today, period, profile, mode, signOut, invitations, organizations, organizationId } = useStore();
+  const { canCollect } = usePermissions();
+  const current = organizations.length > 1 ? organizations.find((o) => o.id === organizationId) : undefined;
   const summaries = useTenantSummaries();
   const totals = useMonthTotals();
   const pct = totals.expected ? Math.round((totals.collected / totals.expected) * 100) : 0;
@@ -33,7 +36,7 @@ export default function Accueil() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Screen
-        subtitle={greeting(today) + ','}
+        subtitle={current ? `${current.name} · ${greeting(today).toLowerCase()},` : greeting(today) + ','}
         title={profile.firstName}
         bottomInset={96}
         right={
@@ -150,8 +153,26 @@ export default function Accueil() {
                 {formatAmount(totals.outstanding)} à recevoir
               </Text>
             </View>
-            <Button label="Relancer" icon={Send} variant="danger" compact />
+            {canCollect ? (
+              <Button label="Relancer" icon={Send} variant="danger" compact onPress={() => router.push('/locataires')} />
+            ) : null}
           </View>
+        ) : null}
+
+        {invitations.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/invitations')}
+            style={{ backgroundColor: c.primarySoft, borderRadius: radius.md, padding: space.md, gap: 2 }}>
+            <Text variant="bodyStrong" tone="primary">
+              {invitations.length === 1
+                ? `${invitations[0].organization.name} vous invite à rejoindre son espace`
+                : `${invitations.length} espaces vous invitent à les rejoindre`}
+            </Text>
+            <Text variant="small" tone="muted">
+              Voir l’invitation
+            </Text>
+          </Pressable>
         ) : null}
 
         <StartChecklist />

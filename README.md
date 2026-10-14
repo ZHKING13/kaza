@@ -60,6 +60,14 @@ Fonctionnement en mode serveur :
   locataire : « Envoyer une relance par Kaza » et la liste des messages envoyés (reçu, lu, échec) ; sur la
   quittance : « Envoyer la quittance par Kaza » (PDF produit par le serveur). Le bouton WhatsApp ouvre toujours
   l'application WhatsApp du bailleur pour un message personnel.
+- **Équipe** (étape 7) : Plus › Équipe et gérants. Le propriétaire invite par numéro (gérant, collecteur, lecteur),
+  change les rôles, retire un membre ; la personne invitée voit l'invitation en se connectant (avant de créer son
+  propre espace, ou sur l'accueil) et la rejoint ou la refuse. Un membre peut quitter l'espace. Les boutons suivent
+  le rôle (un collecteur encaisse et relance, mais n'ajoute ni bien ni locataire, n'enregistre pas de départ et
+  n'annule pas de paiement ; un lecteur consulte). Plus › Journal d'activité (propriétaire, gérant) : qui a fait quoi.
+- **Plusieurs espaces** : son propre espace et ceux où l'on a été invité ; changement dans l'onglet Plus (refusé tant
+  que des enregistrements hors ligne attendent d'être envoyés). Rôles et invitations sont relus à l'ouverture de
+  l'application : un membre retiré quitte l'espace sur son téléphone.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
   masqués), quittance produite par le serveur.

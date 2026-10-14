@@ -7,7 +7,7 @@ import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
 import { type ProrataRule, prorataRules, rentForPeriod } from '@/data/prorata';
 import type { MessagingSettings } from '@/data/remote';
-import { useStore } from '@/data/store';
+import { usePermissions, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { formatAmount, formatPeriod, periodOf } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
@@ -18,7 +18,9 @@ export default function Parametres() {
   const { c } = useTheme();
   const { settings, setSettings, today, remote, syncedAt } = useStore();
   const [error, setError] = useState<string>();
+  const { isOwner } = usePermissions();
   const choose = (prorata: ProrataRule) => {
+    if (!isOwner) return;
     setError(undefined);
     setSettings({ prorata }).catch((e) => setError(errorMessage(e)));
   };
@@ -30,6 +32,11 @@ export default function Parametres() {
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.md, gap: space.md }}>
       <Stack.Screen options={{ title: 'Paramètres' }} />
+      {!isOwner ? (
+        <Text variant="small" tone="muted" style={{ backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: space.sm }}>
+          Seul le propriétaire de l’espace peut modifier ces réglages.
+        </Text>
+      ) : null}
       <View style={{ gap: 4 }}>
         <Text variant="h3" accessibilityRole="header">
           Mois d’entrée et de départ
@@ -47,7 +54,8 @@ export default function Parametres() {
             <Pressable
               key={r}
               accessibilityRole="radio"
-              accessibilityState={{ checked: on }}
+              accessibilityState={{ checked: on, disabled: !isOwner }}
+              disabled={!isOwner}
               onPress={() => choose(r)}
               style={{
                 flexDirection: 'row',
@@ -88,7 +96,7 @@ export default function Parametres() {
       </View>
       <FormError message={error} />
 
-      {settings.messaging ? <MessagingSection value={settings.messaging} /> : null}
+      {settings.messaging ? <MessagingSection value={settings.messaging} readOnly={!isOwner} /> : null}
 
       <View style={{ gap: 4, marginTop: space.md }}>
         <Text variant="h3" accessibilityRole="header">
@@ -109,11 +117,12 @@ export default function Parametres() {
 const DAYS_BEFORE = [0, 1, 3, 5];
 
 /** Compte en ligne : ce que Kaza envoie aux locataires par WhatsApp (repli SMS). */
-function MessagingSection({ value }: { value: MessagingSettings }) {
+function MessagingSection({ value, readOnly }: { value: MessagingSettings; readOnly: boolean }) {
   const { c } = useTheme();
   const { setSettings } = useStore();
   const [error, setError] = useState<string>();
   const change = (messaging: Partial<MessagingSettings>) => {
+    if (readOnly) return;
     setError(undefined);
     setSettings({ messaging: { ...value, ...messaging } }).catch((e) => setError(errorMessage(e)));
   };
@@ -139,6 +148,7 @@ function MessagingSection({ value }: { value: MessagingSettings }) {
       <Switch
         accessibilityLabel={title}
         value={on}
+        disabled={readOnly}
         onValueChange={onChange}
         trackColor={{ true: c.primary, false: c.border }}
         thumbColor={c.surface}

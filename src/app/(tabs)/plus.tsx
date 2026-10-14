@@ -1,4 +1,16 @@
-import { ChevronRight, Crown, FileText, LifeBuoy, LogOut, type LucideIcon, Settings, UsersRound } from 'lucide-react-native';
+import {
+  Building2,
+  ChevronRight,
+  Crown,
+  FileText,
+  History,
+  LifeBuoy,
+  LogOut,
+  type LucideIcon,
+  MailOpen,
+  Settings,
+  UsersRound,
+} from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -13,7 +25,9 @@ import { Screen } from '@/components/Screen';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
 import { prorataRules } from '@/data/prorata';
-import { useStore } from '@/data/store';
+import { roleLabels, usePermissions, useStore } from '@/data/store';
+import { errorMessage } from '@/lib/api';
+import { FormError } from '@/components/FormError';
 import { createAccountFromDemo } from '@/lib/demo';
 import { formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
@@ -60,8 +74,12 @@ function Row({
 
 export default function Plus() {
   const { c, status } = useTheme();
-  const { settings, profile, mode, session, signOut, units, outbox, remote } = useStore();
+  const { settings, profile, mode, session, signOut, units, outbox, remote, organizations, organizationId, invitations, switchOrganization } =
+    useStore();
+  const { role, canAudit } = usePermissions();
   const [confirmOut, setConfirmOut] = useState(false);
+  const [switchError, setSwitchError] = useState<string>();
+  const current = organizations.find((o) => o.id === organizationId);
   return (
     <Screen title="Plus">
       {mode === 'demo' ? (
@@ -106,8 +124,41 @@ export default function Plus() {
         </View>
       </View>
 
+      {remote && current ? (
+        <Card padded={false}>
+          {organizations.map((o, i) => (
+            <Row
+              key={o.id}
+              icon={Building2}
+              label={o.name}
+              hint={o.id === organizationId ? `${roleLabels[o.role]} · ouvert` : roleLabels[o.role]}
+              first={i === 0}
+              onPress={
+                o.id === organizationId
+                  ? undefined
+                  : () => {
+                      setSwitchError(undefined);
+                      switchOrganization(o.id).catch((e) => setSwitchError(errorMessage(e)));
+                    }
+              }
+            />
+          ))}
+          {invitations.length > 0 ? (
+            <Row icon={MailOpen} label={`Invitations reçues (${invitations.length})`} onPress={() => router.push('/invitations')} />
+          ) : null}
+        </Card>
+      ) : null}
+      <FormError message={switchError} />
+
       <Card padded={false}>
-        <Row icon={UsersRound} label="Équipe et gérants" first />
+        <Row
+          icon={UsersRound}
+          label="Équipe et gérants"
+          hint={remote ? roleLabels[role] : undefined}
+          first
+          onPress={remote ? () => router.push('/equipe') : undefined}
+        />
+        {remote && canAudit ? <Row icon={History} label="Journal d’activité" onPress={() => router.push('/journal')} /> : null}
         <Row icon={FileText} label="Rapports et exports" />
         <Row
           icon={Settings}

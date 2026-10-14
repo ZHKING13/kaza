@@ -11,7 +11,7 @@ import { PropertyCover } from '@/components/PropertyCover';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { propertyTypes } from '@/data/propertyTypes';
-import { type PropertySummary, usePropertySummaries } from '@/data/store';
+import { type PropertySummary, usePermissions, usePropertySummaries } from '@/data/store';
 import { formatNumber } from '@/lib/format';
 import { fonts, radius, space, useTheme } from '@/theme';
 
@@ -102,6 +102,7 @@ function PropertyCard({ s }: { s: PropertySummary }) {
 
 export default function Biens() {
   const { c } = useTheme();
+  const { canManage } = usePermissions();
   const summaries = usePropertySummaries();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -119,6 +120,7 @@ export default function Biens() {
       title="Biens"
       subtitle={`${summaries.length} biens · ${unitCount} unités`}
       right={
+        !canManage ? undefined : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Ajouter un bien"
@@ -137,6 +139,7 @@ export default function Biens() {
             Nouveau
           </Text>
         </Pressable>
+        )
       }>
       <View
         style={{

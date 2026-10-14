@@ -2,7 +2,7 @@ import { type Href, router } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { useStore } from '@/data/store';
+import { usePermissions, useStore } from '@/data/store';
 import { radius, space, useTheme } from '@/theme';
 
 import { Button } from './Button';
@@ -15,6 +15,8 @@ type Step = { done: boolean; title: string; hint: string; action: string; href: 
 export function StartChecklist() {
   const { c } = useTheme();
   const { properties, tenants, payments, mode } = useStore();
+  // Créer biens et locataires : propriétaire et gérant
+  const { canManage } = usePermissions();
   const steps: Step[] = [
     {
       done: properties.length > 0,
@@ -39,7 +41,7 @@ export function StartChecklist() {
     },
   ];
   const doneCount = steps.filter((s) => s.done).length;
-  if (mode === 'demo' || doneCount === steps.length) return null;
+  if (mode === 'demo' || !canManage || doneCount === steps.length) return null;
   const current = steps.findIndex((s) => !s.done);
 
   return (

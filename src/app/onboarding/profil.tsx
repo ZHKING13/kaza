@@ -19,7 +19,7 @@ import { fonts, space, useTheme } from '@/theme';
 export default function OnboardingProfil() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { profile, session, setProfile, signOut } = useStore();
+  const { profile, session, setProfile, signOut, invitations } = useStore();
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);
   const initial = splitPhone(profile.phone || '', countries[0]);
@@ -51,7 +51,8 @@ export default function OnboardingProfil() {
         lastName: lastName.trim(),
         phone: phoneKnown ? profile.phone : `+${country.dial}${digits}`,
       });
-      router.push('/onboarding/premier-bien');
+      // Numéro invité par un espace : proposer de le rejoindre avant de créer le sien
+      router.push(invitations.length > 0 ? '/onboarding/invitation' : '/onboarding/premier-bien');
     } catch (e) {
       setSaveError(errorMessage(e));
     } finally {

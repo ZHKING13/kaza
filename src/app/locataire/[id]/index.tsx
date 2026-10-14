@@ -15,7 +15,7 @@ import { useSettlementDoc } from '@/data/documents';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Text } from '@/components/Text';
 import { byMethod, methods } from '@/data/methods';
-import { useFormerTenants, useStore, useTenantSummaries } from '@/data/store';
+import { useFormerTenants, usePermissions, useStore, useTenantSummaries } from '@/data/store';
 import type { Payment } from '@/data/types';
 import { formatAmount, formatDate, formatPeriod, formatPhone } from '@/lib/format';
 import { callPhone, openWhatsApp } from '@/lib/whatsapp';
@@ -90,6 +90,7 @@ export default function LocataireDetail() {
   const { c, status } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { payments, period, organizationId } = useStore();
+  const { canManage, canCollect } = usePermissions();
   const summary = useTenantSummaries().find((s) => s.tenant.id === id);
   const former = useFormerTenants().find((f) => f.tenant.id === id);
   const settlementDoc = useSettlementDoc(id);
@@ -186,7 +187,7 @@ export default function LocataireDetail() {
             }
           />
         </View>
-        {remaining > 0 ? (
+        {remaining > 0 && canCollect ? (
           <Button
             label={`Encaisser ${formatAmount(remaining)}`}
             icon={Plus}
@@ -229,16 +230,18 @@ export default function LocataireDetail() {
           </Fact>
         </Card>
 
-        <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0} />
+        <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0 && canCollect} />
 
         <History items={historyOf(tenant.id)} />
 
-        <Button
-          label="Enregistrer le départ"
-          icon={LogOut}
-          variant="danger"
-          onPress={() => router.push({ pathname: '/locataire/[id]/depart', params: { id: tenant.id } })}
-        />
+        {canManage ? (
+          <Button
+            label="Enregistrer le départ"
+            icon={LogOut}
+            variant="danger"
+            onPress={() => router.push({ pathname: '/locataire/[id]/depart', params: { id: tenant.id } })}
+          />
+        ) : null}
       </ScrollView>
     </>
   );

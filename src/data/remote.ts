@@ -31,15 +31,60 @@ export type MessagingSettings = {
   autoMessagesEnabled: boolean;
 };
 
+export type Role = 'owner' | 'manager' | 'collector' | 'viewer';
+
 export type ApiOrganization = {
   id: string;
   name: string;
+  type?: 'individual' | 'agency';
   countryCode: string;
   currency: string;
   timeZone: string;
   prorataRule: ProrataRule;
   messaging?: MessagingSettings;
-  role: 'owner' | 'manager' | 'collector' | 'viewer';
+  role: Role;
+};
+
+/** Membre d'un espace */
+export type TeamMember = {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  role: Role;
+  joinedAt: string;
+  isMe: boolean;
+};
+
+/** Invitation en attente, vue par l'espace */
+export type TeamInvitation = {
+  id: string;
+  phone: string;
+  role: Role;
+  expiresAt: string;
+  createdAt: string;
+  invitedBy: { id: string; name: string } | null;
+};
+
+/** Invitation reçue sur le numéro de l'utilisateur */
+export type ReceivedInvitation = {
+  id: string;
+  role: Role;
+  expiresAt: string;
+  organization: { id: string; name: string; type: 'individual' | 'agency' };
+  invitedBy: { id: string; name: string } | null;
+};
+
+/** Ligne du journal d'activité */
+export type ActivityEntry = {
+  id: string;
+  action: string;
+  actor: { id: string; name: string; role: Role | null } | null;
+  entityType: string;
+  entityId: string;
+  subject: string | null;
+  data: Record<string, unknown> | null;
+  createdAt: string;
 };
 
 export type TenantMessageKind = 'rent_due_soon' | 'rent_late' | 'rent_manual' | 'receipt' | 'welcome' | 'settlement';
@@ -237,6 +282,32 @@ export const remote = {
     orgId: string,
     body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings> },
   ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+
+  members: (orgId: string) => api.get<TeamMember[]>(`/user/organizations/${orgId}/members`),
+
+  changeRole: (orgId: string, userId: string, role: Role) =>
+    api.patch<TeamMember[]>(`/user/organizations/${orgId}/members/${userId}`, { role }),
+
+  removeMember: (orgId: string, userId: string) => api.delete<void>(`/user/organizations/${orgId}/members/${userId}`),
+
+  invitations: (orgId: string) => api.get<TeamInvitation[]>(`/user/organizations/${orgId}/invitations`),
+
+  invite: (orgId: string, phone: string, role: Role) =>
+    api.post<TeamInvitation>(`/user/organizations/${orgId}/invitations`, { phone, role }),
+
+  revokeInvitation: (orgId: string, invitationId: string) =>
+    api.delete<void>(`/user/organizations/${orgId}/invitations/${invitationId}`),
+
+  receivedInvitations: () => api.get<ReceivedInvitation[]>('/user/invitations'),
+
+  acceptInvitation: (invitationId: string) => api.post<ApiOrganization>(`/user/invitations/${invitationId}/accept`, {}),
+
+  declineInvitation: (invitationId: string) => api.post<void>(`/user/invitations/${invitationId}/decline`, {}),
+
+  activity: (orgId: string, cursor?: string) =>
+    api.get<{ items: ActivityEntry[]; nextCursor: string | null }>(
+      `/user/organizations/${orgId}/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    ),
 
   messages: (orgId: string, leaseId: string) =>
     api.get<TenantMessage[]>(`/user/organizations/${orgId}/leases/${leaseId}/messages`),

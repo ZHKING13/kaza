@@ -16,7 +16,7 @@ import { TenantRow } from '@/components/TenantRow';
 import { Text } from '@/components/Text';
 import { methods } from '@/data/methods';
 import { propertyTypes } from '@/data/propertyTypes';
-import { usePropertySummaries, useStore } from '@/data/store';
+import { usePermissions, usePropertySummaries, useStore } from '@/data/store';
 import { formatAmount, formatDate, formatNumber } from '@/lib/format';
 import { elevation, fonts, radius, space, useTheme } from '@/theme';
 
@@ -54,6 +54,7 @@ export default function BienDetail() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { payments } = useStore();
+  const { canManage, canCollect } = usePermissions();
   const s = usePropertySummaries().find((x) => x.property.id === id);
   const [tab, setTab] = useState<Tab>('unites');
 
@@ -192,6 +193,7 @@ export default function BienDetail() {
                       key={u.id}
                       accessibilityRole="button"
                       accessibilityLabel={t ? undefined : `${u.label}, vacante : ajouter un locataire`}
+                      disabled={!t && !canManage}
                       onPress={() =>
                         t
                           ? router.push({ pathname: '/locataire/[id]', params: { id: t.tenant.id } })
@@ -203,12 +205,14 @@ export default function BienDetail() {
                   );
                 })}
               </Card>
+              {canManage ? (
               <Button
                 label="Ajouter des unités"
                 icon={Plus}
                 variant="secondary"
                 onPress={() => router.push({ pathname: '/bien/[id]/unites', params: { id: property.id } })}
               />
+              ) : null}
             </View>
           ) : null}
 
@@ -260,7 +264,7 @@ export default function BienDetail() {
         </View>
       </ScrollView>
 
-      {s.lateCount > 0 || s.tenants.some((t) => t.status !== 'paid') ? (
+      {canCollect && (s.lateCount > 0 || s.tenants.some((t) => t.status !== 'paid')) ? (
         <View
           style={{
             position: 'absolute',

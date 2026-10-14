@@ -41,6 +41,7 @@ function RootStack() {
         <Stack.Protected guard={signedIn && !onboarded}>
           <Stack.Screen name="onboarding/profil" options={{ title: '', headerBackVisible: false }} />
           <Stack.Screen name="onboarding/premier-bien" options={{ title: '' }} />
+          <Stack.Screen name="onboarding/invitation" options={{ title: '' }} />
         </Stack.Protected>
 
         {/* Application */}
@@ -54,6 +55,9 @@ function RootStack() {
           <Stack.Screen name="bien/[id]/unites" options={{ title: 'Ajouter des unités', presentation: 'modal' }} />
           <Stack.Screen name="quittance/[id]" options={{ title: 'Quittance' }} />
           <Stack.Screen name="parametres" options={{ title: 'Paramètres' }} />
+          <Stack.Screen name="equipe" options={{ title: 'Équipe' }} />
+          <Stack.Screen name="invitations" options={{ title: 'Invitations' }} />
+          <Stack.Screen name="journal" options={{ title: 'Journal d’activité' }} />
           <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
         </Stack.Protected>
       </Stack>
