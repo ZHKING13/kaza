@@ -49,6 +49,8 @@ function RootStack() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="locataire/[id]/index" options={{ title: 'Locataire' }} />
           <Stack.Screen name="locataire/[id]/depart" options={{ title: 'Départ du locataire', presentation: 'modal' }} />
+          <Stack.Screen name="locataire/[id]/loyer" options={{ title: 'Réviser le loyer', presentation: 'modal' }} />
+          <Stack.Screen name="locataire/[id]/contrat" options={{ title: 'Fin du contrat et préavis', presentation: 'modal' }} />
           <Stack.Screen name="locataire/nouveau" options={{ title: 'Nouveau locataire', presentation: 'modal' }} />
           <Stack.Screen name="encaisser" options={{ title: 'Encaisser un loyer', presentation: 'modal' }} />
           <Stack.Screen name="bien/[id]/index" options={{ headerShown: false }} />

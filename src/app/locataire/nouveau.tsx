@@ -22,7 +22,7 @@ import { methodOrder, methods } from '@/data/methods';
 import { rentForPeriod } from '@/data/prorata';
 import { advancePeriods, useStore } from '@/data/store';
 import type { PaymentMethod } from '@/data/types';
-import { dayLabel, formatAmount, formatNumber, formatPeriod, periodOf } from '@/lib/format';
+import { dayLabel, formatAmount, formatDate, formatNumber, formatPeriod, periodOf } from '@/lib/format';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { fonts, radius, space, useTheme } from '@/theme';
 
@@ -51,6 +51,12 @@ function FieldLabel({ children }: { children: string }) {
 function advanceRange(months: number, from: Date) {
   const p = (i: number) => formatPeriod(periodOf(new Date(from.getFullYear(), from.getMonth() + i, 1)));
   return months <= 1 ? p(0) : `${p(0)} à ${p(months - 1)}`;
+}
+
+/** Fin d'un contrat de `years` ans : la veille de l'anniversaire de l'entrée (ISO, midi). */
+function contractEnd(entryDate: string, years: number): string {
+  const d = new Date(entryDate);
+  return new Date(d.getFullYear() + years, d.getMonth(), d.getDate() - 1, 12).toISOString();
 }
 
 export default function NouveauLocataire() {
@@ -82,6 +88,8 @@ export default function NouveauLocataire() {
   const [national, setNational] = useState('');
   const [rent, setRent] = useState(unit?.rent ?? 0);
   const [dueDay, setDueDay] = useState(5);
+  /** Durée du contrat en années (0 : indéterminée) */
+  const [years, setYears] = useState(0);
   const [entryDate, setEntryDate] = useState(() =>
     new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
   );
@@ -158,6 +166,7 @@ export default function NouveauLocataire() {
         dueDay,
         depositMonths: deposit,
         entryDate,
+        endDate: years > 0 ? contractEnd(entryDate, years) : undefined,
         rent,
         advanceMonths: advance,
         advanceMethod,
@@ -409,6 +418,19 @@ export default function NouveauLocataire() {
                 <Chip key={d} label={`Le ${d}`} selected={dueDay === d} onPress={() => setDueDay(d)} />
               ))}
             </View>
+          </View>
+          <View style={{ gap: 6 }}>
+            <FieldLabel>Durée du contrat</FieldLabel>
+            <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+              {[0, 1, 2, 3].map((n) => (
+                <Chip key={n} label={n === 0 ? 'Indéterminée' : `${n} an${n > 1 ? 's' : ''}`} selected={years === n} onPress={() => setYears(n)} />
+              ))}
+            </View>
+            <Text variant="small" tone="muted">
+              {years > 0
+                ? `Jusqu’au ${formatDate(contractEnd(entryDate, years))}. Kaza vous préviendra avant la fin.`
+                : 'Sans date de fin. Vous pourrez en ajouter une depuis la fiche du locataire.'}
+            </Text>
           </View>
         </Section>
 

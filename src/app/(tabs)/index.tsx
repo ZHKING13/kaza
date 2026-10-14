@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Fab } from '@/components/Fab';
 import { KazaMark } from '@/components/KazaMark';
+import { LeaseAlerts } from '@/components/LeaseAlerts';
 import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
 import { DemoBanner } from '@/components/DemoBanner';
@@ -174,6 +175,8 @@ export default function Accueil() {
             </Text>
           </Pressable>
         ) : null}
+
+        <LeaseAlerts />
 
         <StartChecklist />
 

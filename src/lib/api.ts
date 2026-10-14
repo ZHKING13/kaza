@@ -134,6 +134,8 @@ export const api = {
     request<T>('POST', path, { ...options, body, auth: options?.auth ?? true }),
   patch: <T>(path: string, body: unknown, options?: RequestOptions) =>
     request<T>('PATCH', path, { ...options, body, auth: options?.auth ?? true }),
+  put: <T>(path: string, body: unknown, options?: RequestOptions) =>
+    request<T>('PUT', path, { ...options, body, auth: options?.auth ?? true }),
   delete: <T>(path: string, options?: RequestOptions) => request<T>('DELETE', path, { ...options, auth: options?.auth ?? true }),
   /** Appelé quand la session ne peut plus être renouvelée (révoquée ou expirée) */
   onSessionExpired(handler: (() => void) | null) {

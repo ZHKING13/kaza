@@ -2,6 +2,7 @@ import { periodOf } from '@/lib/format';
 import { periodsBetween } from '@/lib/dates';
 
 import { type ProrataRule, rentForPeriod } from './prorata';
+import { type Rent, rentAt } from './rent';
 import type { Payment, Tenant } from './types';
 
 export type Balance = {
@@ -16,7 +17,7 @@ export type Balance = {
 /** Compte du locataire arrêté au mois `untilPeriod` (et à `exitDate` pour le prorata du dernier mois). */
 export function tenantBalance(
   tenant: Tenant,
-  rent: number,
+  rent: Rent,
   payments: Payment[],
   untilPeriod: string,
   rule: ProrataRule = 'full',
@@ -48,9 +49,12 @@ export function tenantBalance(
 
 export type SettlementInput = {
   tenant: Tenant;
-  rent: number;
+  /** Montant fixe ou échéancier daté (révisions) */
+  rent: Rent;
   payments: Payment[];
   exitDate: string;
+  /** Caution versée à l'entrée ; par défaut `depositMonths` × loyer du mois d'entrée (elle ne suit pas les révisions) */
+  deposit?: number;
   deductArrears: boolean;
   deductions: { label: string; amount: number }[];
   rule?: ProrataRule;
@@ -60,9 +64,9 @@ export type SettlementInput = {
  * Solde de tout compte : caution + avance non consommée − impayés retenus − retenues.
  * Si les impayés dépassent ce qui est disponible, le solde devient négatif (le locataire doit).
  */
-export function computeSettlement({ tenant, rent, payments, exitDate, deductArrears, deductions, rule = 'full' }: SettlementInput) {
+export function computeSettlement({ tenant, rent, payments, exitDate, deposit: paid, deductArrears, deductions, rule = 'full' }: SettlementInput) {
   const b = tenantBalance(tenant, rent, payments, periodOf(new Date(exitDate)), rule, exitDate);
-  const deposit = tenant.depositMonths * rent;
+  const deposit = paid ?? tenant.depositMonths * rentAt(rent, tenant.entryDate ? periodOf(new Date(tenant.entryDate)) : '0000-01');
   const available = deposit + b.prepaid;
   const arrearsDeducted = deductArrears ? Math.min(b.arrears, available) : 0;
   const unpaidBeyondDeposit = deductArrears ? b.arrears - arrearsDeducted : 0;

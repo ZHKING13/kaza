@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { KazaMessages } from '@/components/KazaMessages';
+import { LeaseEndBanner, LeaseTerms } from '@/components/LeaseTerms';
 import { OnlinePayment } from '@/components/OnlinePayment';
 import { MethodDot } from '@/components/MethodDot';
 import { PdfButton } from '@/components/PdfButton';
@@ -176,6 +177,7 @@ export default function LocataireDetail() {
             <StatusBadge status={summary.status} style={{ alignSelf: 'flex-start' }} />
           </View>
         </View>
+        <LeaseEndBanner tenant={tenant} />
 
         <View style={{ flexDirection: 'row', gap: space.xs }}>
           <Button label="Appeler" icon={Phone} variant="secondary" style={{ flex: 1 }} onPress={() => callPhone(tenant.phone)} />
@@ -199,7 +201,7 @@ export default function LocataireDetail() {
 
         <Card style={{ paddingVertical: space.xxs }}>
           <Fact label="Loyer mensuel" first>
-            <Amount value={unit.rent} />
+            <Amount value={summary.rent} />
           </Fact>
           <Fact label={`Payé en ${formatPeriod(period).split(' ')[0]}`}>
             <Amount value={summary.paid} />
@@ -217,7 +219,7 @@ export default function LocataireDetail() {
           </Fact>
           <Fact label="Caution">
             <Text variant="bodyStrong" style={{ fontVariant: ['tabular-nums'] }}>
-              {tenant.depositMonths ? `${tenant.depositMonths} mois · ${formatAmount(tenant.depositMonths * unit.rent)}` : 'Aucune'}
+              {tenant.depositMonths ? `${tenant.depositMonths} mois · ${formatAmount(tenant.depositMonths * (tenant.rent ?? unit.rent))}` : 'Aucune'}
             </Text>
           </Fact>
           {tenant.entryDate ? (
@@ -231,6 +233,8 @@ export default function LocataireDetail() {
             </Text>
           </Fact>
         </Card>
+
+        <LeaseTerms tenant={tenant} unit={unit} canManage={canManage} />
 
         <OnlinePayment leaseId={tenant.id} remaining={remaining} canSend={canCollect} />
 

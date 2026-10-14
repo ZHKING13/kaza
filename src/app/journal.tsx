@@ -11,7 +11,7 @@ import { type ActivityEntry, remote, type Role } from '@/data/remote';
 import { roleLabels, useStore } from '@/data/store';
 import type { PaymentMethod } from '@/data/types';
 import { errorMessage } from '@/lib/api';
-import { formatAmount, formatPeriod } from '@/lib/format';
+import { formatAmount, formatDate, formatPeriod } from '@/lib/format';
 import { space, useTheme } from '@/theme';
 
 const role = (r: unknown) => (typeof r === 'string' && r in roleLabels ? roleLabels[r as Role].toLowerCase() : '');
@@ -40,6 +40,21 @@ export function describeActivity(e: ActivityEntry): string {
       return `${who} a annulé un paiement de ${amount} — ${subject}, ${period}${typeof d.reason === 'string' ? ` (« ${d.reason} »)` : ''}`;
     case 'lease.created':
       return `${who} a ajouté le locataire ${subject}`;
+    case 'lease.rent_revised': {
+      const from = typeof d.from === 'string' ? formatPeriod(d.from) : '';
+      const previous = typeof d.previous === 'number' ? ` (au lieu de ${formatAmount(d.previous)})` : '';
+      return `${who} a révisé le loyer de ${subject} : ${amount} à partir de ${from}${previous}`;
+    }
+    case 'lease.rent_revision_cancelled':
+      return `${who} a retiré la révision du loyer de ${subject} (${amount}, ${typeof d.from === 'string' ? formatPeriod(d.from) : ''})`;
+    case 'lease.end_date_changed':
+      return typeof d.endDate === 'string'
+        ? `${who} a fixé la fin du contrat de ${subject} au ${formatDate(d.endDate)}`
+        : `${who} a passé le contrat de ${subject} en durée indéterminée`;
+    case 'lease.notice_given':
+      return `${who} a enregistré un préavis ${d.from === 'landlord' ? 'du bailleur' : 'du locataire'} pour ${subject} : départ prévu le ${typeof d.exitDate === 'string' ? formatDate(d.exitDate) : ''}`;
+    case 'lease.notice_withdrawn':
+      return `${who} a retiré le préavis de ${subject}`;
     case 'lease.ended':
       return `${who} a enregistré le départ de ${subject}`;
     case 'invitation.created':

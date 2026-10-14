@@ -10,9 +10,20 @@ import { formatAmount, periodOf } from '@/lib/format';
 
 import { countries, splitPhone } from './countries';
 
-import { buildPayments, units, properties, tenants } from './mock';
+import { buildPayments, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
 import { type ProrataRule, rentForPeriod } from './prorata';
+import {
+  defaultLeaseSettings,
+  lastRentChange,
+  type LeaseEnd,
+  leaseEnd,
+  type LeaseSettings,
+  rentAt,
+  rentRevisionDue,
+  tenantRent,
+  toCalendar,
+} from './rent';
 import { isRetryable, type OutboxDraft, type OutboxEntry, type OutboxFailure, type OutboxResult, retryDelay, sendOutboxEntry } from './outbox';
 import {
   type ApiOrganization,
@@ -24,7 +35,7 @@ import {
   type RemoteData,
   type Role,
 } from './remote';
-import type { Payment, PaymentMethod, Property, Settlement, Tenant, TenantSummary, Unit } from './types';
+import type { Notice, Payment, PaymentMethod, Property, RentRevision, Settlement, Tenant, TenantSummary, Unit } from './types';
 
 export type OrganizationSummary = { id: string; name: string; role: Role; type?: 'individual' | 'agency' };
 
@@ -36,6 +47,8 @@ export type Settings = {
   messaging?: MessagingSettings;
   /** Liens de paiement mobile money disponibles sur le serveur */
   onlinePayments?: boolean;
+  /** Préavis par défaut et seuils des alertes (valeurs par défaut sans compte en ligne) */
+  leases?: LeaseSettings;
 };
 
 /** Le bailleur : son nom figure sur les quittances. */
@@ -114,6 +127,8 @@ type Action =
   | { type: 'addProperty'; property: Property; units: Unit[] }
   | { type: 'addUnits'; units: Unit[] }
   | { type: 'addTenant'; tenant: Tenant; rent: number; payments: Payment[] }
+  | { type: 'updateTenant'; tenantId: string; patch: Partial<Tenant> }
+  | { type: 'setUnitRent'; unitId: string; rent: number }
   | { type: 'recordDeparture'; tenantId: string; exitDate: string; settlement: Settlement; addPayments: Payment[]; removePaymentIds: string[] };
 
 export type NewUnit = Pick<Unit, 'label' | 'rent'>;
@@ -221,6 +236,7 @@ function reducer(state: State, action: Action): State {
           prorata: action.data.organization.prorataRule,
           messaging: action.data.organization.messaging,
           onlinePayments: action.data.organization.onlinePaymentsEnabled ?? false,
+          leases: action.data.organization.leases ?? state.settings.leases,
         },
         properties: action.data.properties.map((p) => ({ ...p, photo: photos.get(p.id) })),
         units: action.data.units,
@@ -249,6 +265,10 @@ function reducer(state: State, action: Action): State {
         units: state.units.map((u) => (u.id === action.tenant.unitId ? { ...u, rent: action.rent } : u)),
         payments: [...action.payments, ...state.payments],
       };
+    case 'updateTenant':
+      return { ...state, tenants: state.tenants.map((t) => (t.id === action.tenantId ? { ...t, ...action.patch } : t)) };
+    case 'setUnitRent':
+      return { ...state, units: state.units.map((u) => (u.id === action.unitId ? { ...u, rent: action.rent } : u)) };
     case 'recordDeparture': {
       const removed = new Set(action.removePaymentIds);
       return {
@@ -291,6 +311,15 @@ type Store = State & {
   addTenant: (input: NewTenant) => Promise<string>;
   /** Enregistre le départ : solde de tout compte, impayés retenus sur la caution, unité libérée. */
   recordDeparture: (input: Departure) => Promise<Settlement>;
+  /** Révise le loyer à partir d'un mois (au plus tôt le mois en cours) ; les mois passés gardent leur loyer. */
+  reviseRent: (input: RentRevisionInput) => Promise<void>;
+  /** Retire une révision qui ne porte pas sur un mois passé */
+  cancelRentRevision: (tenantId: string, revisionId: string) => Promise<void>;
+  /** Fin du contrat (ISO), ou null : durée indéterminée */
+  setEndDate: (tenantId: string, endDate: string | null) => Promise<void>;
+  /** Enregistre un préavis (Kaza ne le signifie pas au locataire) */
+  giveNotice: (tenantId: string, notice: Notice) => Promise<void>;
+  withdrawNotice: (tenantId: string) => Promise<void>;
   /** Annule un paiement (erreur de saisie, argent non reçu…) : il disparaît des montants encaissés. */
   voidPayment: (paymentId: string, reason: string) => Promise<void>;
   /** Ouvre un autre espace du compte (refusé tant que des enregistrements attendent d'être envoyés) */
@@ -313,7 +342,19 @@ export type Departure = {
   refundMethod?: PaymentMethod;
 };
 
-export type NewTenant = Omit<Tenant, 'id' | 'advanceMonthsLeft'> & {
+export type RentRevisionInput = {
+  tenantId: string;
+  amount: number;
+  /** Premier mois concerné, "YYYY-MM" */
+  from: string;
+  reason?: string;
+  /** Prévenir le locataire par WhatsApp (compte en ligne) */
+  notifyTenant: boolean;
+  /** Le logement prend ce loyer pour les prochains locataires */
+  applyToUnit: boolean;
+};
+
+export type NewTenant = Omit<Tenant, 'id' | 'advanceMonthsLeft' | 'rent' | 'rents' | 'notice'> & {
   rent: number;
   advanceMonths: number;
   advanceMethod: PaymentMethod;
@@ -379,7 +420,7 @@ function demoState(today: Date): Partial<State> {
     profile: { firstName: 'Kouassi', lastName: 'Brou', phone: '+2250700112233' },
     properties,
     units,
-    tenants,
+    tenants: demoTenants(today),
     payments: buildPayments(today),
   };
 }
@@ -455,6 +496,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         type: 'setSettings',
         settings: {
           ...(result.organization.messaging ? { messaging: result.organization.messaging } : {}),
+          ...(result.organization.leases ? { leases: result.organization.leases } : {}),
           onlinePayments: result.organization.onlinePaymentsEnabled ?? false,
         },
       });
@@ -707,15 +749,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSettings: async (settings) => {
         const messaging = settings.messaging;
         const merged = messaging && state.settings.messaging ? { ...state.settings.messaging, ...messaging } : messaging;
-        const apply = () => dispatch({ type: 'setSettings', settings: merged ? { ...settings, messaging: merged } : settings });
+        const leases = settings.leases;
+        const mergedLeases = leases ? { ...(state.settings.leases ?? defaultLeaseSettings), ...leases } : undefined;
+        const apply = () =>
+          dispatch({
+            type: 'setSettings',
+            settings: { ...settings, ...(merged ? { messaging: merged } : {}), ...(mergedLeases ? { leases: mergedLeases } : {}) },
+          });
         // Sans espace encore, la règle part avec la création de l'espace
-        if (online && (settings.prorata || messaging) && organizationRef.current) {
+        if (online && (settings.prorata || messaging || leases) && organizationRef.current) {
           await write(
             {
               kind: 'updateOrganization',
               orgId: organizationRef.current,
-              body: { ...(settings.prorata ? { prorataRule: settings.prorata } : {}), ...(messaging ? { messaging } : {}) },
-              label: messaging ? 'Messages aux locataires' : 'Règle des mois incomplets',
+              body: {
+                ...(settings.prorata ? { prorataRule: settings.prorata } : {}),
+                ...(messaging ? { messaging } : {}),
+                ...(leases ? { leases } : {}),
+              },
+              label: messaging ? 'Messages aux locataires' : leases ? 'Préavis et alertes' : 'Règle des mois incomplets',
             },
             apply,
           );
@@ -822,7 +874,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           period,
         }));
         const apply = () =>
-          dispatch({ type: 'addTenant', tenant: { ...rest, id, advanceMonthsLeft: advanceMonths }, rent, payments });
+          dispatch({ type: 'addTenant', tenant: { ...rest, id, rent, rents: [], advanceMonthsLeft: advanceMonths }, rent, payments });
         if (online) {
           const orgId = await ensureOrganization();
           await write(
@@ -836,6 +888,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 rent,
                 dueDay: rest.dueDay,
                 entryDate: calendarDate(rest.entryDate ?? now.toISOString()),
+                endDate: rest.endDate ? calendarDate(rest.endDate) : undefined,
                 depositMonths: rest.depositMonths,
                 advance: advanceMonths > 0 ? { months: advanceMonths, method: advanceMethod } : undefined,
               },
@@ -848,6 +901,114 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
         return id;
+      },
+      reviseRent: async ({ tenantId, amount, from, reason, notifyTenant, applyToUnit }) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const unit = state.units.find((u) => u.id === tenant.unitId)!;
+        const revision: RentRevision = { id: newId(), from, amount, reason };
+        // Le loyer d'entrée est figé avant que le logement change de loyer
+        const rents = [...(tenant.rents ?? []).filter((r) => r.from !== from), revision].sort((a, b) => a.from.localeCompare(b.from));
+        const entryRent = tenant.rent ?? unit.rent;
+        const apply = () => {
+          dispatch({ type: 'updateTenant', tenantId, patch: { rent: entryRent, rents } });
+          // Une unité louée affiche le loyer du mois en cours
+          dispatch({ type: 'setUnitRent', unitId: unit.id, rent: rentAt(tenantRent({ ...tenant, rent: entryRent, rents }, unit), periodOf(today)) });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'reviseRent',
+              orgId,
+              leaseId: tenantId,
+              body: { id: revision.id, amount, from, reason, notifyTenant, applyToUnit },
+              label: `Révision du loyer de ${tenant.firstName} ${tenant.lastName} (${formatAmount(amount)})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      cancelRentRevision: async (tenantId, revisionId) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const unit = state.units.find((u) => u.id === tenant.unitId)!;
+        const rents = (tenant.rents ?? []).filter((r) => r.id !== revisionId);
+        const apply = () => {
+          dispatch({ type: 'updateTenant', tenantId, patch: { rents } });
+          dispatch({ type: 'setUnitRent', unitId: unit.id, rent: rentAt(tenantRent({ ...tenant, rents }, unit), periodOf(today)) });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'cancelRentRevision',
+              orgId,
+              leaseId: tenantId,
+              revisionId,
+              label: `Révision du loyer retirée (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      setEndDate: async (tenantId, endDate) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const apply = () => dispatch({ type: 'updateTenant', tenantId, patch: { endDate: endDate ?? undefined } });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'setEndDate',
+              orgId,
+              leaseId: tenantId,
+              endDate: endDate ? calendarDate(endDate) : null,
+              label: `Fin du contrat de ${tenant.firstName} ${tenant.lastName}`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      giveNotice: async (tenantId, notice) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const apply = () => dispatch({ type: 'updateTenant', tenantId, patch: { notice } });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'giveNotice',
+              orgId,
+              leaseId: tenantId,
+              body: {
+                from: notice.from,
+                date: calendarDate(notice.date),
+                exitDate: calendarDate(notice.exitDate),
+                reason: notice.reason,
+              },
+              label: `Préavis de ${tenant.firstName} ${tenant.lastName}`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      withdrawNotice: async (tenantId) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const apply = () => dispatch({ type: 'updateTenant', tenantId, patch: { notice: undefined } });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            { kind: 'withdrawNotice', orgId, leaseId: tenantId, label: `Préavis retiré (${tenant.firstName} ${tenant.lastName})` },
+            apply,
+          );
+          return;
+        }
+        apply();
       },
       voidPayment: async (paymentId, reason) => {
         const apply = () => dispatch({ type: 'removePayment', paymentId });
@@ -870,7 +1031,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       recordDeparture: async ({ tenantId, exitDate, deductArrears, deductions, refundMethod }) => {
         const tenant = state.tenants.find((t) => t.id === tenantId)!;
-        const rent = state.units.find((u) => u.id === tenant.unitId)!.rent;
+        const rent = tenantRent(tenant, state.units.find((u) => u.id === tenant.unitId)!);
         const { balanceDetail: b, arrearsDeducted, ...rest } = computeSettlement({
           tenant,
           rent,
@@ -962,7 +1123,8 @@ export function useTenantSummaries(): TenantSummary[] {
           const notStarted = !!entry && periodOf(entry) > period;
           let dueDate = new Date(today.getFullYear(), today.getMonth(), tenant.dueDay);
           if (entry && entry > dueDate) dueDate = entry;
-          const due = rentForPeriod(unit.rent, period, settings.prorata, tenant.entryDate).amount;
+          const schedule = tenantRent(tenant, unit);
+          const due = rentForPeriod(schedule, period, settings.prorata, tenant.entryDate).amount;
           const status: TenantSummary['status'] = notStarted
             ? 'upcoming'
             : paid >= due
@@ -973,10 +1135,48 @@ export function useTenantSummaries(): TenantSummary[] {
                   dayKey(today) > dayKey(dueDate)
                   ? 'late'
                   : 'upcoming';
-          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString() };
+          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString(), rent: rentAt(schedule, period) };
         }),
     [tenants, units, properties, payments, today, period, settings.prorata],
   );
+}
+
+export type LeaseAlerts = {
+  /** Préavis, fin de contrat proche ou échue, de la plus proche à la plus lointaine */
+  ending: { summary: TenantSummary; end: LeaseEnd }[];
+  /** Loyer inchangé depuis le nombre de mois réglé */
+  revisions: { summary: TenantSummary; since: string }[];
+};
+
+/** Alertes « Fin de contrat proche » et « Révision de loyer » de l'accueil. */
+export function useLeaseAlerts(): LeaseAlerts {
+  const summaries = useTenantSummaries();
+  const { today, period, settings } = useStore();
+  const rules = settings.leases ?? defaultLeaseSettings;
+  return useMemo(() => {
+    const day = toCalendar(today.toISOString());
+    const ending = summaries
+      .map((summary) => {
+        const t = summary.tenant;
+        const end = leaseEnd(
+          {
+            endDate: t.endDate ? toCalendar(t.endDate) : null,
+            notice: t.notice ? { exitDate: toCalendar(t.notice.exitDate) } : null,
+          },
+          day,
+          rules.leaseEndAlertDays,
+        );
+        return end ? { summary, end } : null;
+      })
+      .filter((x): x is { summary: TenantSummary; end: LeaseEnd } => !!x)
+      .sort((a, b) => a.end.daysLeft - b.end.daysLeft);
+    const revisions = summaries
+      // Sans date d'entrée, on ne sait pas depuis quand le loyer n'a pas changé
+      .filter((s) => !!s.tenant.entryDate && rentRevisionDue(tenantRent(s.tenant, s.unit), period, rules.rentRevisionAlertMonths))
+      .map((summary) => ({ summary, since: lastRentChange(tenantRent(summary.tenant, summary.unit), period) ?? period }))
+      .sort((a, b) => a.since.localeCompare(b.since));
+    return { ending, revisions };
+  }, [summaries, today, period, rules]);
 }
 
 export function useMonthTotals() {
