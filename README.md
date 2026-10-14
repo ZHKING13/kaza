@@ -55,6 +55,11 @@ Fonctionnement en mode serveur :
   appareil qui ne sait pas en produire (simulateur iOS, Android sans Google Play), la demande part sans.
   Android : renseigner `EXPO_PUBLIC_GOOGLE_CLOUD_PROJECT_NUMBER`. iOS : capacité App Attest déclarée dans `app.json`.
   La clé `x-api-key` identifie l'application auprès du serveur mais n'est pas un secret.
+- **Messages aux locataires** (étape 5) : dans Paramètres, relances automatiques (rappel avant l'échéance, relance
+  de retard) et envoi automatique des quittances, du message de bienvenue et du solde de départ. Sur la fiche
+  locataire : « Envoyer une relance par Kaza » et la liste des messages envoyés (reçu, lu, échec) ; sur la
+  quittance : « Envoyer la quittance par Kaza » (PDF produit par le serveur). Le bouton WhatsApp ouvre toujours
+  l'application WhatsApp du bailleur pour un message personnel.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : photos des biens (gardées sur le téléphone), connexion Google / Apple (boutons
   masqués), quittance produite par le serveur.

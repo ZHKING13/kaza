@@ -18,6 +18,19 @@ export type ApiUser = {
   lastName: string | null;
 };
 
+/** Messages envoyés aux locataires par le serveur (WhatsApp, repli SMS). */
+export type MessagingSettings = {
+  /** Relances automatiques du loyer */
+  remindersEnabled: boolean;
+  /** Rappel N jours avant l'échéance (0 : aucun) */
+  reminderDaysBefore: number;
+  /** Après l'échéance, relance tous les N jours (0 : une seule) */
+  reminderLateRepeatDays: number;
+  reminderLateMax: number;
+  /** Quittance après chaque encaissement, bienvenue, solde de départ */
+  autoMessagesEnabled: boolean;
+};
+
 export type ApiOrganization = {
   id: string;
   name: string;
@@ -25,7 +38,25 @@ export type ApiOrganization = {
   currency: string;
   timeZone: string;
   prorataRule: ProrataRule;
+  messaging?: MessagingSettings;
   role: 'owner' | 'manager' | 'collector' | 'viewer';
+};
+
+export type TenantMessageKind = 'rent_due_soon' | 'rent_late' | 'rent_manual' | 'receipt' | 'welcome' | 'settlement';
+export type TenantMessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled';
+
+/** Message envoyé à un locataire par Kaza */
+export type TenantMessage = {
+  id: string;
+  leaseId: string;
+  paymentId: string | null;
+  kind: TenantMessageKind;
+  period: string | null;
+  channel: 'whatsapp' | 'sms' | null;
+  status: TenantMessageStatus;
+  error: string | null;
+  createdAt: string;
+  sentAt: string | null;
 };
 
 type ApiPayment = {
@@ -202,8 +233,19 @@ export const remote = {
   createOrganization: (body: { id: string; name: string; countryCode: string }) =>
     api.post<ApiOrganization>('/user/organizations', body),
 
-  updateOrganization: (orgId: string, body: { prorataRule?: ProrataRule; name?: string }) =>
-    api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+  updateOrganization: (
+    orgId: string,
+    body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings> },
+  ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+
+  messages: (orgId: string, leaseId: string) =>
+    api.get<TenantMessage[]>(`/user/organizations/${orgId}/leases/${leaseId}/messages`),
+
+  sendRentReminder: (orgId: string, leaseId: string) =>
+    api.post<TenantMessage>(`/user/organizations/${orgId}/leases/${leaseId}/messages/rent-reminder`, {}),
+
+  sendReceipt: (orgId: string, paymentId: string) =>
+    api.post<TenantMessage>(`/user/organizations/${orgId}/payments/${paymentId}/messages/receipt`, {}),
 
   snapshot: async (orgId: string, today: Date) =>
     fromSnapshot(await api.get<ApiSnapshot>(`/user/organizations/${orgId}/snapshot`), today),

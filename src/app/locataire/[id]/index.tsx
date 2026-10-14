@@ -7,6 +7,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
+import { KazaMessages } from '@/components/KazaMessages';
 import { MethodDot } from '@/components/MethodDot';
 import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
@@ -88,7 +89,7 @@ function History({ items }: { items: Payment[] }) {
 export default function LocataireDetail() {
   const { c, status } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { payments, period } = useStore();
+  const { payments, period, organizationId } = useStore();
   const summary = useTenantSummaries().find((s) => s.tenant.id === id);
   const former = useFormerTenants().find((f) => f.tenant.id === id);
   const settlementDoc = useSettlementDoc(id);
@@ -138,6 +139,7 @@ export default function LocataireDetail() {
               ) : null}
             </>
           ) : null}
+          <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={false} />
           <History items={historyOf(tenant.id)} />
         </ScrollView>
       </>
@@ -226,6 +228,8 @@ export default function LocataireDetail() {
             </Text>
           </Fact>
         </Card>
+
+        <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0} />
 
         <History items={historyOf(tenant.id)} />
 

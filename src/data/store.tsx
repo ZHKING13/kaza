@@ -14,11 +14,13 @@ import { buildPayments, units, properties, tenants } from './mock';
 import { computeSettlement } from './ledger';
 import { type ProrataRule, rentForPeriod } from './prorata';
 import { isRetryable, type OutboxDraft, type OutboxEntry, type OutboxFailure, type OutboxResult, retryDelay, sendOutboxEntry } from './outbox';
-import { type ApiUser, calendarDate, remote, type RemoteData } from './remote';
+import { type ApiUser, calendarDate, type MessagingSettings, remote, type RemoteData } from './remote';
 import type { Payment, PaymentMethod, Property, Settlement, Tenant, TenantSummary, Unit } from './types';
 
 export type Settings = {
   prorata: ProrataRule;
+  /** Messages envoyés par le serveur aux locataires (compte en ligne seulement) */
+  messaging?: MessagingSettings;
 };
 
 /** Le bailleur : son nom figure sur les quittances. */
@@ -148,7 +150,11 @@ function reducer(state: State, action: Action): State {
         ...state,
         onboarded: true,
         organizationId: action.data.organization.id,
-        settings: { ...state.settings, prorata: action.data.organization.prorataRule },
+        settings: {
+          ...state.settings,
+          prorata: action.data.organization.prorataRule,
+          messaging: action.data.organization.messaging,
+        },
         properties: action.data.properties.map((p) => ({ ...p, photo: photos.get(p.id) })),
         units: action.data.units,
         tenants: action.data.tenants,
@@ -340,6 +346,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const afterSent = (result: OutboxResult) => {
+    if (result.kind === 'organization' && result.messaging) {
+      // Réglages des messages tels que le serveur les a enregistrés
+      dispatch({ type: 'setSettings', settings: { messaging: result.messaging } });
+    }
     if (result.kind === 'lease') {
       dispatch({ type: 'replaceLeasePayments', leaseId: result.leaseId, removeIds: result.localPaymentIds, payments: result.payments });
     }
@@ -552,15 +562,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'signOut' });
       },
       setSettings: async (settings) => {
-        const apply = () => dispatch({ type: 'setSettings', settings });
+        const messaging = settings.messaging;
+        const merged = messaging && state.settings.messaging ? { ...state.settings.messaging, ...messaging } : messaging;
+        const apply = () => dispatch({ type: 'setSettings', settings: merged ? { ...settings, messaging: merged } : settings });
         // Sans espace encore, la règle part avec la création de l'espace
-        if (online && settings.prorata && organizationRef.current) {
+        if (online && (settings.prorata || messaging) && organizationRef.current) {
           await write(
             {
               kind: 'updateOrganization',
               orgId: organizationRef.current,
-              body: { prorataRule: settings.prorata },
-              label: 'Règle des mois incomplets',
+              body: { ...(settings.prorata ? { prorataRule: settings.prorata } : {}), ...(messaging ? { messaging } : {}) },
+              label: messaging ? 'Messages aux locataires' : 'Règle des mois incomplets',
             },
             apply,
           );

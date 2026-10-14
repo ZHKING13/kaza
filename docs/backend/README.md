@@ -136,10 +136,10 @@ Reste : départ et solde côté serveur, photos (stockage objet), connexion Goog
 | Étape | Contenu | Résultat |
 |---|---|---|
 | 1 | Projet NestJS, Prisma, migration `schema.sql`, `packages/domain`, CI (lint, typecheck, tests) — **fait** | Base qui démarre |
-| 2 | Auth : OTP WhatsApp / SMS, Google, Apple, sessions — **fait côté API** | Connexion réelle dans l'application (à brancher : `src/lib/auth.ts`) |
-| 3 | Organisation, biens, unités, locataires, baux (entrée avec avance) — **fait côté API** (photos : à faire) | Données sauvegardées sur le serveur |
-| 4 | Paiements, annulation, tableau de bord, départ et solde | Parcours complet synchronisé |
-| 5 | Relances et quittances envoyées par WhatsApp (BullMQ) | Moins de gestes pour le bailleur |
+| 2 | Auth : OTP WhatsApp / SMS, Google, Apple, sessions ; preuve d'intégrité de l'application — **fait**, branché dans l'application (Google / Apple : boutons à brancher) | Connexion réelle |
+| 3 | Organisation, biens, unités, locataires, baux (entrée avec avance), file d'envoi hors ligne — **fait** (photos : à faire) | Données sauvegardées sur le serveur |
+| 4 | Paiements, annulation, tableau de bord, départ et solde — **fait** | Parcours complet synchronisé |
+| 5 | Relances, quittances PDF, bienvenue et solde envoyés par WhatsApp (BullMQ, repli SMS) — **fait** (modèles WhatsApp à faire approuver par Meta) | Moins de gestes pour le bailleur |
 | 6 | Mobile money (agrégateur, webhooks, rapprochement) | Paiement par lien |
 | 7 | Gérants et agences (invitations, rôles) | Offre Pro / Agence |
 

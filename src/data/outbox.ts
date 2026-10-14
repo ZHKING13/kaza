@@ -1,7 +1,15 @@
 import { ApiError } from '@/lib/api';
 
 import type { ProrataRule } from './prorata';
-import { type DepartureBody, type LeaseBody, type PaymentBody, type PropertyBody, remote, type UnitBody } from './remote';
+import {
+  type DepartureBody,
+  type LeaseBody,
+  type MessagingSettings,
+  type PaymentBody,
+  type PropertyBody,
+  remote,
+  type UnitBody,
+} from './remote';
 import type { Payment, Settlement } from './types';
 
 /**
@@ -15,7 +23,11 @@ import type { Payment, Settlement } from './types';
 export type OutboxOp =
   | { kind: 'createOrganization'; body: { id: string; name: string; countryCode: string }; prorataRule?: ProrataRule }
   | { kind: 'updateProfile'; body: { firstName: string; lastName: string } }
-  | { kind: 'updateOrganization'; orgId: string; body: { prorataRule: ProrataRule } }
+  | {
+      kind: 'updateOrganization';
+      orgId: string;
+      body: { prorataRule?: ProrataRule; messaging?: Partial<MessagingSettings> };
+    }
   | { kind: 'createProperty'; orgId: string; body: PropertyBody }
   | { kind: 'addUnits'; orgId: string; propertyId: string; units: UnitBody[] }
   /** `localPaymentIds` : avance calculée sur le téléphone, remplacée par celle du serveur après l'envoi */
@@ -43,6 +55,7 @@ export type OutboxFailure = { key: string; label: string; message: string; at: s
 export type OutboxResult =
   | { kind: 'lease'; leaseId: string; payments: Payment[]; localPaymentIds: string[] }
   | { kind: 'departure'; leaseId: string; settlement: Settlement; payments: Payment[]; localPaymentIds: string[]; voidedPaymentIds: string[] }
+  | { kind: 'organization'; messaging?: MessagingSettings }
   | { kind: 'done' };
 
 export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult> {
@@ -52,14 +65,15 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       if (entry.prorataRule && entry.prorataRule !== organization.prorataRule) {
         await remote.updateOrganization(organization.id, { prorataRule: entry.prorataRule });
       }
-      return { kind: 'done' };
+      return { kind: 'organization', messaging: organization.messaging };
     }
     case 'updateProfile':
       await remote.updateProfile(entry.body.firstName, entry.body.lastName);
       return { kind: 'done' };
-    case 'updateOrganization':
-      await remote.updateOrganization(entry.orgId, entry.body);
-      return { kind: 'done' };
+    case 'updateOrganization': {
+      const organization = await remote.updateOrganization(entry.orgId, entry.body);
+      return { kind: 'organization', messaging: organization.messaging };
+    }
     case 'createProperty':
       await remote.createProperty(entry.orgId, entry.body);
       return { kind: 'done' };

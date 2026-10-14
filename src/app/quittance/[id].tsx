@@ -9,7 +9,10 @@ import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { FormError } from '@/components/FormError';
 import { KazaMark } from '@/components/KazaMark';
+import { KazaSendButton } from '@/components/KazaSendButton';
 import { PdfButton } from '@/components/PdfButton';
+import { useServerMessaging } from '@/data/messages';
+import { remote } from '@/data/remote';
 import { Text } from '@/components/Text';
 import { useReceipt } from '@/data/documents';
 import { useStore } from '@/data/store';
@@ -139,10 +142,25 @@ export default function Quittance() {
           </Text>
         ) : null}
       </Card>
+      <SendReceiptByKaza paymentId={payment.id} full={full} disabled={payment.method === 'caution'} />
       <PdfButton label={full ? 'Partager la quittance (PDF)' : 'Partager le reçu (PDF)'} html={r.html} fileName={r.fileName} variant="primary" />
       <Button label="Envoyer un message WhatsApp" icon={MessageCircle} variant="secondary" onPress={() => openWhatsApp(tenant.phone, text)} />
       {/* Les retenues sur caution font partie du solde de départ : pas d'annulation */}
       {payment.method !== 'caution' && !tenant.exitDate ? <VoidPayment paymentId={payment.id} /> : null}
     </ScrollView>
+  );
+}
+
+/** Compte en ligne : Kaza envoie le PDF sur le WhatsApp du locataire (repli SMS, texte seul). */
+function SendReceiptByKaza({ paymentId, full, disabled }: { paymentId: string; full: boolean; disabled: boolean }) {
+  const { enabled, organizationId } = useServerMessaging();
+  if (!enabled || !organizationId || disabled) return null;
+  return (
+    <KazaSendButton
+      label={full ? 'Envoyer la quittance par Kaza' : 'Envoyer le reçu par Kaza'}
+      sentLabel="Envoi en cours sur le WhatsApp du locataire."
+      variant="primary"
+      send={() => remote.sendReceipt(organizationId, paymentId)}
+    />
   );
 }

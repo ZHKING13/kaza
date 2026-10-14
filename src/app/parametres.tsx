@@ -1,10 +1,12 @@
 import { Stack } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 
+import { Chip } from '@/components/Chip';
 import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
 import { type ProrataRule, prorataRules, rentForPeriod } from '@/data/prorata';
+import type { MessagingSettings } from '@/data/remote';
 import { useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { formatAmount, formatPeriod, periodOf } from '@/lib/format';
@@ -86,6 +88,8 @@ export default function Parametres() {
       </View>
       <FormError message={error} />
 
+      {settings.messaging ? <MessagingSection value={settings.messaging} /> : null}
+
       <View style={{ gap: 4, marginTop: space.md }}>
         <Text variant="h3" accessibilityRole="header">
           Données
@@ -99,5 +103,91 @@ export default function Parametres() {
         </Text>
       </View>
     </ScrollView>
+  );
+}
+
+const DAYS_BEFORE = [0, 1, 3, 5];
+
+/** Compte en ligne : ce que Kaza envoie aux locataires par WhatsApp (repli SMS). */
+function MessagingSection({ value }: { value: MessagingSettings }) {
+  const { c } = useTheme();
+  const { setSettings } = useStore();
+  const [error, setError] = useState<string>();
+  const change = (messaging: Partial<MessagingSettings>) => {
+    setError(undefined);
+    setSettings({ messaging: { ...value, ...messaging } }).catch((e) => setError(errorMessage(e)));
+  };
+
+  const row = (title: string, hint: string, on: boolean, onChange: (v: boolean) => void) => (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.sm,
+        padding: space.md,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: c.border,
+        backgroundColor: c.surface,
+      }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="bodyStrong">{title}</Text>
+        <Text variant="small" tone="muted">
+          {hint}
+        </Text>
+      </View>
+      <Switch
+        accessibilityLabel={title}
+        value={on}
+        onValueChange={onChange}
+        trackColor={{ true: c.primary, false: c.border }}
+        thumbColor={c.surface}
+      />
+    </View>
+  );
+
+  return (
+    <View style={{ gap: space.xs, marginTop: space.md }}>
+      <View style={{ gap: 4, marginBottom: space.xxs }}>
+        <Text variant="h3" accessibilityRole="header">
+          Messages aux locataires
+        </Text>
+        <Text variant="small" tone="muted">
+          Kaza les envoie sur le WhatsApp du locataire, ou par SMS si WhatsApp ne passe pas, entre 8 h et 20 h.
+        </Text>
+      </View>
+      {row(
+        'Relances automatiques',
+        value.reminderLateRepeatDays > 0
+          ? `Le lendemain de l’échéance si le loyer n’est pas réglé, puis tous les ${value.reminderLateRepeatDays} jours (${value.reminderLateMax} fois au plus).`
+          : 'Le lendemain de l’échéance si le loyer n’est pas réglé.',
+        value.remindersEnabled,
+        (remindersEnabled) => change({ remindersEnabled }),
+      )}
+      {value.remindersEnabled ? (
+        <View style={{ gap: space.xs, paddingHorizontal: space.xxs }}>
+          <Text variant="small" tone="muted">
+            Rappel avant l’échéance
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+            {DAYS_BEFORE.map((d) => (
+              <Chip
+                key={d}
+                label={d === 0 ? 'Aucun' : d === 1 ? 'La veille' : `${d} jours avant`}
+                selected={value.reminderDaysBefore === d}
+                onPress={() => change({ reminderDaysBefore: d })}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+      {row(
+        'Quittances et messages automatiques',
+        'La quittance en PDF après chaque encaissement, un message de bienvenue à l’entrée et le solde de tout compte au départ.',
+        value.autoMessagesEnabled,
+        (autoMessagesEnabled) => change({ autoMessagesEnabled }),
+      )}
+      <FormError message={error} />
+    </View>
   );
 }

@@ -169,9 +169,33 @@ disparaît du snapshot, des totaux et de la situation du mois.
 |---|---|---|---|---|
 | GET | `…/dashboard` | `?period=2026-10` | `{ period, expected, collected, outstanding, lateCount, paidCount, tenantCount, vacantCount, recentPayments: [Payment] }` | Accueil (l'application calcule les mêmes chiffres depuis son cache) |
 
+## Messages aux locataires — **implémentés** (étape 5)
+
+Envoyés par le serveur sur le WhatsApp du locataire (modèles approuvés par Meta), par SMS si WhatsApp échoue,
+entre 8 h et 20 h à l'heure du pays pour les relances automatiques.
+
+| Méthode | Route | Réponse `data` | Écran |
+|---|---|---|---|
+| PATCH | `/user/organizations/:id` avec `{ messaging: { remindersEnabled?, reminderDaysBefore?, reminderLateRepeatDays?, reminderLateMax?, autoMessagesEnabled? } }` | `Organization` (avec `messaging`) | Paramètres › Messages aux locataires (propriétaire) |
+| GET | `…/leases/:id/messages` | `[Message]` (50 derniers) | Fiche locataire › Messages envoyés |
+| POST | `…/leases/:id/messages/rent-reminder` | `Message` (202) | Fiche locataire › Envoyer une relance par Kaza |
+| POST | `…/payments/:id/messages/receipt` | `Message` (202) | Quittance › Envoyer la quittance par Kaza |
+
+`Message = { id, leaseId, paymentId, kind, period, occurrence, channel, status, error, createdAt, sentAt, deliveredAt, readAt }`
+avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | settlement` et
+`status` ∈ `queued | sent | delivered | read | failed | cancelled`.
+
+- Automatique : rappel `reminderDaysBefore` jours avant l'échéance, relance le lendemain puis tous les
+  `reminderLateRepeatDays` jours (`reminderLateMax` fois) si `remindersEnabled` ; quittance PDF après chaque
+  encaissement, bienvenue à l'entrée et solde au départ si `autoMessagesEnabled`. Désactivé par défaut.
+- À la demande : une relance par locataire et par jour, un renvoi de quittance par paiement et par jour
+  (`alreadySent`, 409). Relance refusée si le mois est réglé (`rentNotDue`, 422) ou le locataire parti (`leaseEnded`, 409).
+- Rôles : propriétaire, gérant et collecteur peuvent envoyer ; seul le propriétaire change les réglages.
+- Hors ligne, l'application n'envoie rien plus tard : une relance partie des heures après surprendrait le locataire.
+
 ## Webhooks (public, signés)
 
 | Méthode | Route | Rôle |
 |---|---|---|
 | POST | `/webhooks/mobile-money/:provider` | Confirmation de paiement de l'agrégateur → `Payment` source `mobile_money`, `externalRef` unique |
-| POST | `/webhooks/messaging/:provider` | Statut de livraison WhatsApp / SMS → `Reminder.status` |
+| GET / POST | `/public/webhooks/whatsapp` | **Implémenté** : vérification de l'abonnement Meta, puis statuts de livraison WhatsApp (`X-Hub-Signature-256`) → `Reminder.status` |
