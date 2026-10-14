@@ -1,4 +1,4 @@
-// LoyerFlow design tokens — source: design-system/loyerflow/MASTER.md
+// Kaza design tokens — source: design-system/kaza/MASTER.md
 
 export const palette = {
   light: {
@@ -44,14 +44,14 @@ export const status: Record<
     partial: { fg: '#92400E', bg: '#FEF3C7', label: 'Partiel', icon: 'circle-dashed' },
     late: { fg: '#B91C1C', bg: '#FEE2E2', label: 'En retard', icon: 'circle-alert' },
     upcoming: { fg: '#1D4ED8', bg: '#DBEAFE', label: 'À venir', icon: 'clock' },
-    vacant: { fg: '#475569', bg: '#F1F5F9', label: 'Vacant', icon: 'door-open' },
+    vacant: { fg: '#475569', bg: '#F1F5F9', label: 'Vacante', icon: 'door-open' },
   },
   dark: {
     paid: { fg: '#86EFAC', bg: 'rgba(34,197,94,0.15)', label: 'Payé', icon: 'circle-check' },
     partial: { fg: '#FCD34D', bg: 'rgba(245,158,11,0.15)', label: 'Partiel', icon: 'circle-dashed' },
     late: { fg: '#FCA5A5', bg: 'rgba(239,68,68,0.15)', label: 'En retard', icon: 'circle-alert' },
     upcoming: { fg: '#93C5FD', bg: 'rgba(59,130,246,0.15)', label: 'À venir', icon: 'clock' },
-    vacant: { fg: '#CBD5E1', bg: 'rgba(148,163,184,0.15)', label: 'Vacant', icon: 'door-open' },
+    vacant: { fg: '#CBD5E1', bg: 'rgba(148,163,184,0.15)', label: 'Vacante', icon: 'door-open' },
   },
 };
 
@@ -92,8 +92,8 @@ export const elevation = {
   },
 } as const;
 
-/** 125000 -> "125 000 FCFA" (espace fine insécable) */
+/** 125000 -> "125 000 FCFA" (espace insécable) */
 export function formatAmount(value: number, currency = 'FCFA'): string {
-  const n = Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${n} ${currency}`;
+  const n = Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  return `${n}\u00A0${currency}`;
 }

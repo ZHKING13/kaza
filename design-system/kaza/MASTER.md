@@ -1,4 +1,4 @@
-# LoyerFlow — Design System (MASTER)
+# Kaza — Design System (MASTER)
 
 > Source de vérité globale. Les fichiers de `pages/` surchargent ces règles pour un écran précis.
 > Les valeurs codées sont dans `src/theme/tokens.ts`. Ne jamais écrire une couleur en dur dans un composant.
@@ -55,7 +55,7 @@ Les logos des opérateurs gardent toujours leurs couleurs officielles.
 | **Partiel** | `#92400E` | `#FEF3C7` | `circle-dashed` |
 | **En retard** | `#B91C1C` | `#FEE2E2` | `circle-alert` |
 | **À venir** | `#1D4ED8` | `#DBEAFE` | `clock` |
-| **Vacant** | `#475569` | `#F1F5F9` | `door-open` |
+| **Vacante** | `#475569` | `#F1F5F9` | `door-open` |
 
 Tous les couples texte/fond dépassent 4,5:1. En mode sombre, les fonds passent à 15 % d'opacité de la teinte et les textes à la nuance 300.
 
@@ -79,7 +79,7 @@ Tous les couples texte/fond dépassent 4,5:1. En mode sombre, les fonds passent 
 | `caption` | 12 / 16 | 500 | Horodatages (jamais en dessous) |
 
 ### Formats locaux
-- Montant : `125 000 FCFA`, espace insécable fine pour les milliers, devise **après** le nombre.
+- Montant : `125 000 FCFA`, espace insécable (U+00A0) pour les milliers (l’espace fine est trop étroite en IBM Plex), devise **après** le nombre.
 - Date : `5 oct. 2026` dans les listes, `05/10/2026` dans les formulaires et les quittances.
 - Téléphone : `+225 07 12 34 56 78`, groupes de 2 chiffres.
 
@@ -117,3 +117,9 @@ Tous les couples texte/fond dépassent 4,5:1. En mode sombre, les fonds passent 
 - Flou, verre dépoli, dégradés lourds ou ombres sur chaque carte.
 - Montants alignés à gauche dans une colonne (les aligner à droite, en chiffres tabulaires).
 - Polices décoratives (le mode `--design-system` proposait Cinzel/Josefin Sans, écartées pour leur lisibilité).
+
+## 10. Marque
+
+Voir `docs/brand-guidelines.md`. Le logo et les icônes sont dans `assets/brand/`.
+Le nom et le slogan utilisent **Bricolage Grotesque ExtraBold** (logo uniquement, vectorisé dans les SVG) ;
+toute l'interface reste en IBM Plex Sans.
