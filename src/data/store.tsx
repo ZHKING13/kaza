@@ -14,8 +14,21 @@ import { buildPayments, units, properties, tenants } from './mock';
 import { computeSettlement } from './ledger';
 import { type ProrataRule, rentForPeriod } from './prorata';
 import { isRetryable, type OutboxDraft, type OutboxEntry, type OutboxFailure, type OutboxResult, retryDelay, sendOutboxEntry } from './outbox';
-import { type ApiUser, calendarDate, type MessagingSettings, remote, type RemoteData } from './remote';
+import {
+  type ApiOrganization,
+  type ApiUser,
+  calendarDate,
+  type MessagingSettings,
+  type ReceivedInvitation,
+  remote,
+  type RemoteData,
+  type Role,
+} from './remote';
 import type { Payment, PaymentMethod, Property, Settlement, Tenant, TenantSummary, Unit } from './types';
+
+export type OrganizationSummary = { id: string; name: string; role: Role; type?: 'individual' | 'agency' };
+
+const toSummary = (o: ApiOrganization): OrganizationSummary => ({ id: o.id, name: o.name, role: o.role, type: o.type });
 
 export type Settings = {
   prorata: ProrataRule;
@@ -49,8 +62,12 @@ type State = {
   mode: 'demo' | 'real';
   /** Compte sur le serveur Kaza : les données ci-dessous sont un cache du serveur */
   remote: boolean;
-  /** Espace (organisation) du compte sur le serveur */
+  /** Espace (organisation) ouvert dans l'application */
   organizationId: string | null;
+  /** Espaces du compte (le sien, ceux où il a été invité) et son rôle dans chacun */
+  organizations: OrganizationSummary[];
+  /** Invitations reçues sur le numéro du compte, en attente (relues à la connexion et à l'actualisation) */
+  invitations: ReceivedInvitation[];
   /** Dernière synchronisation réussie avec le serveur (ISO) */
   syncedAt: string | null;
   /** Écritures pas encore envoyées au serveur (pas de réseau), dans l'ordre */
@@ -74,6 +91,13 @@ type Action =
   | { type: 'remoteAccount'; profile: Partial<Profile>; organizationId: string | null }
   | { type: 'remoteLoaded'; data: RemoteData; syncedAt: string }
   | { type: 'setOrganization'; organizationId: string | null }
+  | { type: 'setOrganizations'; organizations: OrganizationSummary[] }
+  | { type: 'upsertOrganization'; organization: OrganizationSummary }
+  | { type: 'setInvitations'; invitations: ReceivedInvitation[] }
+  /** Ouvre un autre espace : les données de l'ancien quittent le téléphone en attendant celles du nouveau */
+  | { type: 'switchOrganization'; organizationId: string }
+  /** Plus aucun espace (retiré ou parti) : retour à l'onboarding */
+  | { type: 'noOrganization' }
   | { type: 'enqueue'; entry: OutboxEntry }
   | { type: 'dequeue'; key: string }
   | { type: 'outboxAttempt'; key: string }
@@ -113,6 +137,43 @@ function reducer(state: State, action: Action): State {
       };
     case 'setOrganization':
       return { ...state, organizationId: action.organizationId };
+    case 'setOrganizations':
+      return { ...state, organizations: action.organizations };
+    case 'upsertOrganization':
+      return {
+        ...state,
+        organizations: state.organizations.some((o) => o.id === action.organization.id)
+          ? state.organizations.map((o) => (o.id === action.organization.id ? action.organization : o))
+          : [...state.organizations, action.organization],
+      };
+    case 'setInvitations':
+      return { ...state, invitations: action.invitations };
+    case 'switchOrganization':
+      return {
+        ...state,
+        onboarded: true,
+        organizationId: action.organizationId,
+        properties: [],
+        units: [],
+        tenants: [],
+        payments: [],
+        syncedAt: null,
+        settings: { prorata: 'full' },
+      };
+    case 'noOrganization':
+      return {
+        ...state,
+        onboarded: false,
+        organizationId: null,
+        organizations: [],
+        properties: [],
+        units: [],
+        tenants: [],
+        payments: [],
+        syncedAt: null,
+        outbox: [],
+        settings: { prorata: 'full' },
+      };
     case 'enqueue':
       return { ...state, outbox: [...state.outbox, action.entry] };
     case 'dequeue':
@@ -150,6 +211,9 @@ function reducer(state: State, action: Action): State {
         ...state,
         onboarded: true,
         organizationId: action.data.organization.id,
+        organizations: state.organizations.some((o) => o.id === action.data.organization.id)
+          ? state.organizations.map((o) => (o.id === action.data.organization.id ? toSummary(action.data.organization) : o))
+          : [...state.organizations, toSummary(action.data.organization)],
         settings: {
           ...state.settings,
           prorata: action.data.organization.prorataRule,
@@ -226,6 +290,13 @@ type Store = State & {
   recordDeparture: (input: Departure) => Promise<Settlement>;
   /** Annule un paiement (erreur de saisie, argent non reçu…) : il disparaît des montants encaissés. */
   voidPayment: (paymentId: string, reason: string) => Promise<void>;
+  /** Ouvre un autre espace du compte (refusé tant que des enregistrements attendent d'être envoyés) */
+  switchOrganization: (organizationId: string) => Promise<void>;
+  /** Rejoint l'espace qui a invité ce numéro, et l'ouvre */
+  acceptInvitation: (invitationId: string) => Promise<void>;
+  declineInvitation: (invitationId: string) => Promise<void>;
+  /** Quitte l'espace ouvert (pas le sien) : ouvre un autre espace, ou revient à l'onboarding */
+  leaveOrganization: (myUserId: string) => Promise<void>;
   /** Relance tout de suite l'envoi des écritures en attente */
   retryOutbox: () => void;
   dismissOutboxFailures: () => void;
@@ -263,6 +334,7 @@ const PERSISTED = [
   'mode',
   'remote',
   'organizationId',
+  'organizations',
   'syncedAt',
   'profile',
   'settings',
@@ -282,6 +354,8 @@ function emptyState(): State {
     mode: 'real',
     remote: false,
     organizationId: null,
+    organizations: [],
+    invitations: [],
     syncedAt: null,
     profile: { firstName: '', lastName: '', phone: '' },
     settings: { prorata: 'full' },
@@ -333,6 +407,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  /** Ouvre un espace : vide les données de l'ancien, puis lit celles du nouveau. */
+  const openOrganization = async (organizationId: string) => {
+    organizationRef.current = organizationId;
+    dispatch({ type: 'switchOrganization', organizationId });
+    await loadRemote(organizationId);
+  };
+
+  /**
+   * Espaces et invitations du compte, relus depuis le serveur. Si l'espace ouvert n'en fait plus partie
+   * (membre retiré), on ouvre le suivant, ou on revient à l'onboarding.
+   */
+  const refreshAccount = async () => {
+    const { organizations } = await remote.me();
+    dispatch({ type: 'setOrganizations', organizations: organizations.map(toSummary) });
+    dispatch({ type: 'setInvitations', invitations: await remote.receivedInvitations().catch(() => []) });
+    const current = organizationRef.current;
+    if (current && !organizations.some((o) => o.id === current)) {
+      if (organizations[0]) await openOrganization(organizations[0].id);
+      else {
+        organizationRef.current = null;
+        dispatch({ type: 'noOrganization' });
+      }
+    }
+  };
+
   const loadRemote = async (organizationId: string) => {
     const data = await remote.snapshot(organizationId, new Date());
     // Des écritures attendent encore d'être envoyées : le serveur ne les connaît pas, on garde le téléphone
@@ -346,9 +445,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const afterSent = (result: OutboxResult) => {
-    if (result.kind === 'organization' && result.messaging) {
+    if (result.kind === 'organization') {
+      dispatch({ type: 'upsertOrganization', organization: toSummary(result.organization) });
       // Réglages des messages tels que le serveur les a enregistrés
-      dispatch({ type: 'setSettings', settings: { messaging: result.messaging } });
+      if (result.organization.messaging) dispatch({ type: 'setSettings', settings: { messaging: result.organization.messaging } });
     }
     if (result.kind === 'lease') {
       dispatch({ type: 'replaceLeasePayments', leaseId: result.leaseId, removeIds: result.localPaymentIds, payments: result.payments });
@@ -429,6 +529,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!state.remote || !state.session) return;
     if (state.outbox.length > 0) void flushRef.current();
     else if (state.organizationId) loadRemote(state.organizationId).catch(() => {});
+    // Rôles et invitations ont pu changer depuis la dernière ouverture
+    refreshAccount().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.hydrated]);
 
@@ -529,6 +631,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       signIn: (session, profile) => dispatch({ type: 'signIn', session: { ...session, signedInAt: new Date().toISOString() }, profile }),
       setRemoteAccount: async (user) => {
         const { organizations } = await remote.me();
+        dispatch({ type: 'setOrganizations', organizations: organizations.map(toSummary) });
+        dispatch({ type: 'setInvitations', invitations: await remote.receivedInvitations().catch(() => []) });
         const organizationId = organizations[0]?.id ?? null;
         organizationRef.current = organizationId;
         dispatch({
@@ -545,8 +649,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       refresh: async () => {
         if (!online) return;
-        if (state.outbox.length > 0) await flushRef.current();
+        await refreshAccount();
+        if (stateRef.current.outbox.length > 0) await flushRef.current();
         else if (organizationRef.current) await loadRemote(organizationRef.current);
+      },
+      switchOrganization: async (organizationId) => {
+        if (organizationId === organizationRef.current) return;
+        if (stateRef.current.outbox.length > 0) {
+          throw new Error('Des enregistrements attendent d’être envoyés. Changez d’espace une fois la connexion revenue.');
+        }
+        await openOrganization(organizationId);
+      },
+      acceptInvitation: async (invitationId) => {
+        const organization = await remote.acceptInvitation(invitationId);
+        dispatch({ type: 'upsertOrganization', organization: toSummary(organization) });
+        dispatch({ type: 'setInvitations', invitations: stateRef.current.invitations.filter((i) => i.id !== invitationId) });
+        if (stateRef.current.outbox.length === 0) await openOrganization(organization.id);
+      },
+      declineInvitation: async (invitationId) => {
+        await remote.declineInvitation(invitationId);
+        dispatch({ type: 'setInvitations', invitations: stateRef.current.invitations.filter((i) => i.id !== invitationId) });
+      },
+      leaveOrganization: async (myUserId) => {
+        const left = organizationRef.current;
+        if (!left) return;
+        await remote.removeMember(left, myUserId);
+        dispatch({ type: 'setOrganizations', organizations: stateRef.current.organizations.filter((o) => o.id !== left) });
+        const next = stateRef.current.organizations.find((o) => o.id !== left);
+        if (next) await openOrganization(next.id);
+        else {
+          organizationRef.current = null;
+          dispatch({ type: 'noOrganization' });
+        }
       },
       retryOutbox: () => void flushRef.current(),
       dismissOutboxFailures: () => dispatch({ type: 'dismissOutboxFailures' }),
@@ -907,3 +1041,29 @@ export function useFormerTenants() {
     [tenants, units, properties],
   );
 }
+
+/**
+ * Ce que le rôle permet dans l'espace ouvert (le serveur vérifie de toute façon). En mode démo ou
+ * local, l'utilisateur est propriétaire.
+ */
+export function usePermissions() {
+  const { remote: isRemote, organizations, organizationId } = useStore();
+  const role: Role = (isRemote && organizations.find((o) => o.id === organizationId)?.role) || 'owner';
+  return {
+    role,
+    isOwner: role === 'owner',
+    /** Biens, locataires, départs, annulations */
+    canManage: role === 'owner' || role === 'manager',
+    /** Encaisser, relancer, envoyer une quittance */
+    canCollect: role !== 'viewer',
+    /** Journal d'activité, invitations en attente */
+    canAudit: role === 'owner' || role === 'manager',
+  };
+}
+
+export const roleLabels: Record<Role, string> = {
+  owner: 'Propriétaire',
+  manager: 'Gérant',
+  collector: 'Collecteur',
+  viewer: 'Lecteur',
+};

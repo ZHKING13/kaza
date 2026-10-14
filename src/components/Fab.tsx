@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 import { Pressable } from 'react-native';
 
+import { usePermissions } from '@/data/store';
 import { elevation, radius, space, useTheme } from '@/theme';
 
 import { Text } from './Text';
@@ -9,6 +10,9 @@ import { Text } from './Text';
 /** Action n° 1 de l'application : encaisser un loyer. */
 export function Fab() {
   const { c } = useTheme();
+  // Un lecteur consulte seulement
+  const { canCollect } = usePermissions();
+  if (!canCollect) return null;
   return (
     <Pressable
         accessibilityRole="button"

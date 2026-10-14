@@ -2,6 +2,7 @@ import { ApiError } from '@/lib/api';
 
 import type { ProrataRule } from './prorata';
 import {
+  type ApiOrganization,
   type DepartureBody,
   type LeaseBody,
   type MessagingSettings,
@@ -55,7 +56,7 @@ export type OutboxFailure = { key: string; label: string; message: string; at: s
 export type OutboxResult =
   | { kind: 'lease'; leaseId: string; payments: Payment[]; localPaymentIds: string[] }
   | { kind: 'departure'; leaseId: string; settlement: Settlement; payments: Payment[]; localPaymentIds: string[]; voidedPaymentIds: string[] }
-  | { kind: 'organization'; messaging?: MessagingSettings }
+  | { kind: 'organization'; organization: ApiOrganization }
   | { kind: 'done' };
 
 export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult> {
@@ -65,14 +66,14 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       if (entry.prorataRule && entry.prorataRule !== organization.prorataRule) {
         await remote.updateOrganization(organization.id, { prorataRule: entry.prorataRule });
       }
-      return { kind: 'organization', messaging: organization.messaging };
+      return { kind: 'organization', organization };
     }
     case 'updateProfile':
       await remote.updateProfile(entry.body.firstName, entry.body.lastName);
       return { kind: 'done' };
     case 'updateOrganization': {
       const organization = await remote.updateOrganization(entry.orgId, entry.body);
-      return { kind: 'organization', messaging: organization.messaging };
+      return { kind: 'organization', organization };
     }
     case 'createProperty':
       await remote.createProperty(entry.orgId, entry.body);

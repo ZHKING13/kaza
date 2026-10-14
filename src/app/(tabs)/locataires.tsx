@@ -10,7 +10,7 @@ import { Fab } from '@/components/Fab';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { TenantRow } from '@/components/TenantRow';
-import { useFormerTenants, useTenantSummaries } from '@/data/store';
+import { useFormerTenants, usePermissions, useTenantSummaries } from '@/data/store';
 import { Avatar } from '@/components/Avatar';
 import { formatDate } from '@/lib/format';
 import { fonts, radius, type RentStatus, space, useTheme } from '@/theme';
@@ -21,6 +21,7 @@ const order: Record<RentStatus, number> = { late: 0, partial: 1, upcoming: 2, pa
 
 export default function Locataires() {
   const { c } = useTheme();
+  const { canManage } = usePermissions();
   const summaries = useTenantSummaries();
   const former = useFormerTenants();
   const [query, setQuery] = useState('');
@@ -52,6 +53,7 @@ export default function Locataires() {
         title="Locataires"
         bottomInset={96}
         right={
+          !canManage ? undefined : (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Ajouter un locataire"
@@ -72,6 +74,7 @@ export default function Locataires() {
               Nouveau
             </Text>
           </Pressable>
+          )
         }>
         <View
           style={{

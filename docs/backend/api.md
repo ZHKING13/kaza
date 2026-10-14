@@ -193,6 +193,31 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
 - Rôles : propriétaire, gérant et collecteur peuvent envoyer ; seul le propriétaire change les réglages.
 - Hors ligne, l'application n'envoie rien plus tard : une relance partie des heures après surprendrait le locataire.
 
+## Équipe et journal d'activité — **implémentés** (étape 7)
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| GET | `…/members` | — | `[Member]` | tous | Plus › Équipe |
+| PATCH | `…/members/:userId` | `{ role }` | `[Member]` | propriétaire | Équipe › Modifier |
+| DELETE | `…/members/:userId` | — | — | propriétaire, ou soi-même (quitter) | Équipe |
+| GET | `…/invitations` | — | `[Invitation]` | propriétaire, gérant | Équipe |
+| POST | `…/invitations` | `{ phone, role }` | `Invitation` | propriétaire | Équipe › Inviter |
+| DELETE | `…/invitations/:id` | — | — | propriétaire | Équipe › Annuler |
+| GET | `/user/invitations` | — | `[ReceivedInvitation]` | compte | Onboarding, accueil, Invitations |
+| POST | `/user/invitations/:id/accept` · `decline` | — | `Organization` · — | compte | Rejoindre · Refuser |
+| GET | `…/activity` | `?cursor=&limit=30` | `{ items: [Activity], nextCursor }` | propriétaire, gérant | Plus › Journal d'activité |
+
+`role` ∈ `manager | collector | viewer` (le propriétaire est le créateur de l'espace).
+`Member = { userId, firstName, lastName, phone, role, joinedAt, isMe }`,
+`Invitation = { id, phone, role, status, expiresAt, createdAt, invitedBy: { id, name } }`,
+`ReceivedInvitation = { id, role, expiresAt, organization: { id, name, type }, invitedBy }`,
+`Activity = { id, action, actor: { id, name, role }, entityType, entityId, subject, data, createdAt }`.
+
+- Invitation valable 7 jours, une seule en attente par numéro et par espace (inviter à nouveau la renouvelle) ;
+  message WhatsApp `kaza_invitation` vers le numéro invité.
+- Erreurs : `alreadyMember`, `invitationExpired`, `ownerCannotLeave` (409), `roleNotAllowed`, `phoneInvalid` (422),
+  `invitationNotFound`, `memberNotFound` (404).
+
 ## Webhooks (public, signés)
 
 | Méthode | Route | Rôle |
