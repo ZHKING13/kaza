@@ -15,10 +15,10 @@ const MUTED = '#475569';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 48 48" aria-label="Kaza"><path fill-rule="evenodd" fill="${DEFAULT_TEAL}" d="M8 22.5 22 10.8a3 3 0 0 1 3.9 0L40 22.5V38a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3Z M19 41V31a5 5 0 0 1 10 0v10Z"/><circle cx="24" cy="21.5" r="3.2" fill="${OCRE}"/></svg>`;
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const fullName = (p: { firstName: string; lastName: string }) => esc(`${p.firstName} ${p.lastName}`.trim());
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const amountWords = (n: number) => `${capitalize(numberToWords(n))} francs CFA`;
+export const amountWords = (n: number) => `${capitalize(numberToWords(n))} francs CFA`;
 
 /** "Awa Koné", "octobre 2026" -> "Awa-Kone-octobre-2026" */
 export function slug(...parts: string[]): string {
@@ -38,7 +38,7 @@ export function receiptNumber(payment: Payment): string {
 }
 
 /** Identité de l'espace telle qu'imprimée ; null : document par défaut (marque Kaza). */
-type Branding = {
+export type Branding = {
   name: string;
   lines: string[];
   color: { main: string; soft: string; line: string };
@@ -68,7 +68,7 @@ export function branding(identity: Identity | undefined, profile: Profile): Bran
   };
 }
 
-function page(title: string, body: string, brand: Branding = null) {
+export function page(title: string, body: string, brand: Branding = null) {
   const TEAL = brand?.color.main ?? DEFAULT_TEAL;
   const SOFT = brand?.color.soft ?? '#F0FDFA';
   const LINE = brand?.color.line ?? '#99F6E4';
@@ -102,10 +102,19 @@ function page(title: string, body: string, brand: Branding = null) {
   .stamp { display: block; max-height: 90px; max-width: 200px; object-fit: contain; margin: 0 0 -38px auto; }
   .note { margin-top: 18px; font-style: italic; }
   .foot { margin-top: 36px; color: ${MUTED}; font-size: 10px; border-top: 1px solid #E2E8F0; padding-top: 8px; }
+  h2 { font-size: 15px; margin: 22px 0 4px; color: ${TEAL}; }
+  table.grid { font-size: 11.5px; margin-top: 4px; }
+  table.grid th { text-align: right; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: ${MUTED}; font-weight: 600; padding: 6px 0 6px 8px; border-bottom: 1px solid ${INK}; }
+  table.grid th:first-child, table.grid td:first-child { text-align: left; padding-left: 0; }
+  table.grid td { text-align: right; padding: 5px 0 5px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.grid td.t { text-align: left; white-space: normal; }
+  table.grid tr.total td { font-weight: 700; font-size: 12px; }
+  .neg { color: #B91C1C; }
+  .avoid { page-break-inside: avoid; }
 </style></head><body>${body}</body></html>`;
 }
 
-function header(title: string, number: string, brand: Branding = null) {
+export function header(title: string, number: string, brand: Branding = null) {
   const mark = !brand
     ? `${LOGO}<b>kaza</b>`
     : brand.logo

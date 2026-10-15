@@ -12,6 +12,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PushBridge } from '@/components/PushBridge';
 import { PlanLimitSheet } from '@/components/PlanLimitSheet';
 import { ToastHost } from '@/components/ToastHost';
+import { UpdateBridge } from '@/components/UpdateBridge';
 import { StoreProvider, useStore } from '@/data/store';
 import { fonts, ThemeProvider, useTheme } from '@/theme';
 
@@ -66,10 +67,15 @@ function RootStack() {
           <Stack.Screen name="offre" options={{ title: 'Mon offre' }} />
           <Stack.Screen name="journal" options={{ title: 'Journal d’activité' }} />
           <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
+          <Stack.Screen name="bien/[id]/mandant" options={{ title: 'Propriétaire du bien', presentation: 'modal' }} />
+          <Stack.Screen name="depense/nouvelle" options={{ title: 'Nouvelle dépense', presentation: 'modal' }} />
+          <Stack.Screen name="depense/[id]" options={{ title: 'Dépense' }} />
+          <Stack.Screen name="rapports" options={{ title: 'Rapports' }} />
         </Stack.Protected>
       </Stack>
       {signedIn ? <PlanLimitSheet /> : null}
       {signedIn && onboarded && remote ? <PushBridge /> : null}
+      <UpdateBridge />
       <ToastHost />
     </>
   );

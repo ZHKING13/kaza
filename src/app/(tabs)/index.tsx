@@ -1,4 +1,4 @@
-import { Bell, CircleAlert, DoorOpen, Send } from 'lucide-react-native';
+import { Bell, CircleAlert, DoorOpen, Receipt, Send } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
@@ -18,7 +18,7 @@ import { StartChecklist } from '@/components/StartChecklist';
 import { createAccountFromDemo } from '@/lib/demo';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
-import { useMonthTotals, usePermissions, useStore, useTenantSummaries } from '@/data/store';
+import { useMonthTotals, usePermissions, useReport, useStore, useTenantSummaries } from '@/data/store';
 import { formatAmount, formatNumber, formatPeriod } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
@@ -33,6 +33,7 @@ export default function Accueil() {
   const current = organizations.length > 1 ? organizations.find((o) => o.id === organizationId) : undefined;
   const summaries = useTenantSummaries();
   const totals = useMonthTotals();
+  const monthReport = useReport(period, period);
   const pct = totals.expected ? Math.round((totals.collected / totals.expected) * 100) : 0;
   const recent = payments.slice(0, 4);
 
@@ -136,6 +137,30 @@ export default function Accueil() {
                 <Text variant="h2">{totals.vacantCount}</Text>
               </Card>
             </View>
+            {monthReport.totals.expenses > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/rapports')}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.sm,
+                  padding: space.sm,
+                  paddingHorizontal: space.md,
+                  borderRadius: radius.md,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: pressed ? c.surfaceAlt : c.surface,
+                })}>
+                <Receipt size={16} color={c.textMuted} />
+                <Text variant="small" tone="muted" style={{ flex: 1 }}>
+                  Dépenses du mois {formatAmount(monthReport.totals.expenses)}
+                </Text>
+                <Text variant="bodyStrong" color={monthReport.totals.net < 0 ? status.late.fg : c.primary}>
+                  Net {formatAmount(monthReport.totals.net)}
+                </Text>
+              </Pressable>
+            ) : null}
           </>
         ) : null}
 

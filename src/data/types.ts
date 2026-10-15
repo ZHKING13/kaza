@@ -13,6 +13,11 @@ export type Property = {
   /** URI locale de la photo, facultative */
   photo?: string;
   description?: string;
+  /** Propriétaire du bien (mandant) quand l'espace le gère pour lui */
+  landlordName?: string;
+  landlordPhone?: string;
+  /** Commission du gestionnaire sur les loyers encaissés, en points de base (750 = 7,5 %) */
+  commissionBps?: number;
 };
 
 export type Unit = {
@@ -92,4 +97,41 @@ export type TenantSummary = {
   dueDate: string;
   /** Loyer du mois en cours (révisions comprises) */
   rent: number;
+};
+
+export type ExpenseCategory = 'works' | 'maintenance' | 'utilities' | 'taxes' | 'insurance' | 'caretaker' | 'agency_fees' | 'other';
+
+export type ExpenseMethod = 'cash' | 'mobile_money' | 'bank' | 'cheque';
+
+/** Dépense d'un bien (et si besoin d'une unité). */
+export type Expense = {
+  id: string;
+  propertyId: string;
+  unitId?: string;
+  category: ExpenseCategory;
+  amount: number;
+  /** Date de la dépense, ISO (midi local) */
+  date: string;
+  method: ExpenseMethod;
+  supplier?: string;
+  note?: string;
+  /** Dépense mensuelle qui l'a créée */
+  scheduleId?: string;
+  /** Photo du justificatif : lien signé du serveur ou data URI pas encore envoyée */
+  receipt?: string;
+};
+
+/** Dépense qui revient chaque mois, le même jour (gardien, abonnement). */
+export type ExpenseSchedule = {
+  id: string;
+  propertyId: string;
+  unitId?: string;
+  category: ExpenseCategory;
+  amount: number;
+  method: ExpenseMethod;
+  supplier?: string;
+  note?: string;
+  dayOfMonth: number;
+  /** Premier mois, "YYYY-MM" */
+  startPeriod: string;
 };

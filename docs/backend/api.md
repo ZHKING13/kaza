@@ -238,6 +238,20 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
   « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
 - Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
 
+## Dépenses — **implémentées** (étape 12)
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| POST | `…/expenses` | `{ id, propertyId, unitId?, category, amount, date, method, supplier?, note?, repeatMonthly? }` | `{ expense, schedule }` | propriétaire, gérant | Fiche du bien › Ajouter une dépense |
+| GET | `…/expenses` | `?propertyId&from&to` | `[Expense]` | tous | — |
+| PATCH | `…/expenses/:id` | champs à modifier (null efface) | `Expense` | propriétaire, gérant | Dépense |
+| POST | `…/expenses/:id/void` | `{ reason }` | `Expense` | propriétaire, gérant | Dépense › Annuler |
+| PUT / DELETE | `…/expenses/:id/receipt` | multipart, champ `file` | `{ receiptUrl }` | propriétaire, gérant | Justificatif |
+| PATCH / POST | `…/expense-schedules/:id`, `…/stop` | `{ amount?, … }` / — | `ExpenseSchedule` | propriétaire, gérant | Dépense › Arrêter |
+| PATCH | `…/properties/:id` | `{ landlordName, landlordPhone, commissionBps }` | `Property` | propriétaire, gérant | Propriétaire du bien |
+
+Snapshot : `expenses`, `expenseSchedules`, mandant sur `properties`. Rapports calculés par l'application (`buildReport`).
+
 ## Notifications push — **implémentées** (étape 11)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |

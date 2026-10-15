@@ -5,7 +5,19 @@ import { periodOf } from '@/lib/format';
 import type { BillingMonths, OrganizationSubscription, PlanId, PlanLimits, SubscriptionStatus } from './plans';
 import type { ProrataRule } from './prorata';
 import { type LeaseSettings, type NoticeFrom, rentAt, tenantRent } from './rent';
-import type { Payment, PaymentMethod, Property, PropertyType, Settlement, Tenant, Unit } from './types';
+import type {
+  Expense,
+  ExpenseCategory,
+  ExpenseMethod,
+  ExpenseSchedule,
+  Payment,
+  PaymentMethod,
+  Property,
+  PropertyType,
+  Settlement,
+  Tenant,
+  Unit,
+} from './types';
 
 /**
  * Données du serveur et conversion vers le modèle de l'application.
@@ -70,7 +82,8 @@ export type IdentityFields = {
 /** Identité telle que le serveur la renvoie : liens signés vers le logo et le cachet (temporaires) */
 export type ApiIdentity = IdentityFields & { logoUrl: string | null; stampUrl: string | null };
 
-export type ImageTarget = 'logo' | 'stamp' | 'property';
+/** `property` : photo du bien ; `expense` : justificatif d'une dépense (`propertyId` porte alors l'id de la dépense) */
+export type ImageTarget = 'logo' | 'stamp' | 'property' | 'expense';
 
 /** Facture d'abonnement */
 export type SubscriptionInvoice = {
@@ -244,11 +257,70 @@ type ApiSnapshot = {
     city: string;
     description: string | null;
     photoUrl?: string | null;
+    landlordName?: string | null;
+    landlordPhone?: string | null;
+    commissionBps?: number | null;
     units: { id: string; label: string; rent: number }[];
   }[];
   leases: ApiLease[];
   payments: ApiPayment[];
+  expenses?: ApiExpense[];
+  expenseSchedules?: ApiExpenseSchedule[];
 };
+
+export type ApiExpense = {
+  id: string;
+  propertyId: string;
+  unitId: string | null;
+  category: ExpenseCategory;
+  amount: number;
+  date: string;
+  method: ExpenseMethod;
+  supplier: string | null;
+  note: string | null;
+  scheduleId: string | null;
+  receiptUrl: string | null;
+};
+
+export type ApiExpenseSchedule = {
+  id: string;
+  propertyId: string;
+  unitId: string | null;
+  category: ExpenseCategory;
+  amount: number;
+  method: ExpenseMethod;
+  supplier: string | null;
+  note: string | null;
+  dayOfMonth: number;
+  startPeriod: string;
+};
+
+export const toExpense = (e: ApiExpense): Expense => ({
+  id: e.id,
+  propertyId: e.propertyId,
+  unitId: e.unitId ?? undefined,
+  category: e.category,
+  amount: e.amount,
+  date: localNoon(e.date),
+  method: e.method,
+  supplier: e.supplier ?? undefined,
+  note: e.note ?? undefined,
+  scheduleId: e.scheduleId ?? undefined,
+  receipt: e.receiptUrl ?? undefined,
+});
+
+export const toExpenseSchedule = (e: ApiExpenseSchedule): ExpenseSchedule => ({
+  id: e.id,
+  propertyId: e.propertyId,
+  unitId: e.unitId ?? undefined,
+  category: e.category,
+  amount: e.amount,
+  method: e.method,
+  supplier: e.supplier ?? undefined,
+  note: e.note ?? undefined,
+  dayOfMonth: e.dayOfMonth,
+  startPeriod: e.startPeriod,
+});
 
 export type RemoteData = {
   organization: ApiOrganization;
@@ -257,6 +329,8 @@ export type RemoteData = {
   units: Unit[];
   tenants: Tenant[];
   payments: Payment[];
+  expenses: Expense[];
+  expenseSchedules: ExpenseSchedule[];
 };
 
 /** Les dates calendaires du serveur sont lues à midi heure locale (même jour partout). */
@@ -318,6 +392,9 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
       city: p.city,
       description: p.description ?? undefined,
       photo: p.photoUrl ?? undefined,
+      landlordName: p.landlordName ?? undefined,
+      landlordPhone: p.landlordPhone ?? undefined,
+      commissionBps: p.commissionBps ?? undefined,
     })),
     // Le loyer affiché d'une unité louée est celui du bail en cours ce mois-ci (comme en mode local)
     units: s.properties.flatMap((p) =>
@@ -325,6 +402,8 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
     ),
     tenants,
     payments,
+    expenses: (s.expenses ?? []).map(toExpense),
+    expenseSchedules: (s.expenseSchedules ?? []).map(toExpenseSchedule),
   };
 }
 
@@ -382,6 +461,32 @@ export type DepartureBody = {
   refundMethod?: PaymentMethod;
 };
 
+export type ExpenseBody = {
+  id: string;
+  propertyId: string;
+  unitId?: string;
+  category: ExpenseCategory;
+  amount: number;
+  /** "YYYY-MM-DD" */
+  date: string;
+  method: ExpenseMethod;
+  supplier?: string;
+  note?: string;
+  repeatMonthly?: boolean;
+};
+
+export type ExpenseUpdateBody = Partial<{
+  unitId: string | null;
+  category: ExpenseCategory;
+  amount: number;
+  date: string;
+  method: ExpenseMethod;
+  supplier: string | null;
+  note: string | null;
+}>;
+
+export type LandlordBody = { landlordName: string | null; landlordPhone: string | null; commissionBps: number | null };
+
 export type PaymentBody = {
   id: string;
   leaseId: string;
@@ -396,6 +501,12 @@ export const calendarDate = (iso: string) => {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+
+function imagePath(orgId: string, target: ImageTarget, id?: string): string {
+  if (target === 'property') return `/user/organizations/${orgId}/properties/${id}/photo`;
+  if (target === 'expense') return `/user/organizations/${orgId}/expenses/${id}/receipt`;
+  return `/user/organizations/${orgId}/identity/${target}`;
+}
 
 export const remote = {
   me: () => api.get<{ user: ApiUser; organizations: ApiOrganization[] }>('/user/me'),
@@ -427,18 +538,27 @@ export const remote = {
   putImage: async (orgId: string, target: ImageTarget, uri: string, propertyId?: string) =>
     api.upload<ApiIdentity | { photoUrl: string | null }>(
       'PUT',
-      target === 'property'
-        ? `/user/organizations/${orgId}/properties/${propertyId}/photo`
-        : `/user/organizations/${orgId}/identity/${target}`,
+      imagePath(orgId, target, propertyId),
       await imageForm(uri, target),
     ),
 
   deleteImage: (orgId: string, target: ImageTarget, propertyId?: string) =>
-    api.delete<ApiIdentity | { photoUrl: string | null }>(
-      target === 'property'
-        ? `/user/organizations/${orgId}/properties/${propertyId}/photo`
-        : `/user/organizations/${orgId}/identity/${target}`,
-    ),
+    api.delete<ApiIdentity | { photoUrl: string | null }>(imagePath(orgId, target, propertyId)),
+
+  createExpense: (orgId: string, body: ExpenseBody) =>
+    api.post<{ expense: ApiExpense; schedule: ApiExpenseSchedule | null }>(`/user/organizations/${orgId}/expenses`, body),
+
+  updateExpense: (orgId: string, expenseId: string, body: ExpenseUpdateBody) =>
+    api.patch<ApiExpense>(`/user/organizations/${orgId}/expenses/${expenseId}`, body),
+
+  voidExpense: (orgId: string, expenseId: string, reason: string) =>
+    api.post<ApiExpense>(`/user/organizations/${orgId}/expenses/${expenseId}/void`, { reason }),
+
+  stopExpenseSchedule: (orgId: string, scheduleId: string) =>
+    api.post<ApiExpenseSchedule>(`/user/organizations/${orgId}/expense-schedules/${scheduleId}/stop`, {}),
+
+  updateLandlord: (orgId: string, propertyId: string, body: LandlordBody) =>
+    api.patch<unknown>(`/user/organizations/${orgId}/properties/${propertyId}`, body),
 
   members: (orgId: string) => api.get<TeamMember[]>(`/user/organizations/${orgId}/members`),
 

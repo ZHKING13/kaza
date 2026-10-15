@@ -184,7 +184,7 @@ export default function Plus() {
           hint={identity.legalName ?? undefined}
           onPress={() => router.push('/identite')}
         />
-        <Row icon={FileText} label="Rapports et exports" />
+        <Row icon={FileText} label="Rapports et exports" onPress={() => router.push('/rapports')} />
         <Row
           icon={Settings}
           label="Paramètres"

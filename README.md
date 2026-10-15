@@ -106,6 +106,20 @@ Fonctionnement en mode serveur :
   le bon écran s'ouvre (fiche du locataire, retards, Mon offre, Équipe), dans le bon espace. La déconnexion arrête les
   notifications sur ce téléphone. Prérequis : un build EAS (pas Expo Go) et `extra.eas.projectId` dans `app.json`
   (voir « Notifications push » ci-dessous) ; sans eux, rien n'est demandé.
+- **Dépenses** (étape 12) : fiche du bien › Dépenses (propriétaire, gérant ; les autres rôles consultent). Montant,
+  catégorie (travaux, entretien, charges, impôt foncier, assurance, gardiennage, frais d'agence, autre), date, unité
+  facultative, moyen de paiement, fournisseur, note, photo du justificatif. « Répéter chaque mois » : la même dépense
+  revient chaque mois le même jour (créée par le serveur, ou par le téléphone sans compte en ligne), modifiable puis
+  arrêtable. Encaissé, dépenses et net du mois et de l'année sur la fiche ; « Dépenses du mois » et net sur l'accueil.
+  Annulation avec motif. Hors ligne : file d'envoi comme pour les paiements.
+- **Propriétaire du bien (mandant)** : pour une agence, sur la fiche du bien, nom, numéro et commission de gestion (%).
+- **Rapports et exports** (Plus › Rapports et exports) : relevé de gestion (période : ce mois, mois dernier, 3 derniers
+  mois, cette année, année dernière ; tous les biens ou certains) en PDF aux couleurs de l'espace, et en Excel (synthèse,
+  mois par mois, paiements, dépenses ; à partir de l'offre Bailleur). Compte rendu par propriétaire (Pro, Agence) :
+  encaissé − commission − dépenses = montant dû, loyers encaissés, dépenses, mois par mois ; résumé envoyé par WhatsApp.
+  Calcul partagé avec l'API (`buildReport`, domaine 0.7.0), sur le téléphone, hors ligne compris.
+- **Mises à jour sans passer par les stores** (EAS Update) : la nouvelle version se télécharge en arrière-plan et
+  s'applique au démarrage suivant ; une version importante propose « Redémarrer » (voir « Publier une mise à jour »).
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : connexion Google / Apple (boutons masqués).
 
@@ -118,6 +132,16 @@ Fonctionnement en mode serveur :
 4. Serveur : `PUSH_PROVIDER=expo` (défaut en production) ; `EXPO_ACCESS_TOKEN` seulement si la « sécurité renforcée »
    des notifications est activée sur le projet Expo.
 5. Build de développement (`eas build --profile development`) pour essayer : Expo Go ne reçoit pas ces notifications.
+
+## Publier une mise à jour (EAS Update)
+
+1. Une fois : `npx eas init` (identifiant du projet), puis `npx eas update:configure` (ajoute `updates.url` à `app.json`).
+2. Builds avec un canal : `eas build --profile preview` (tests, canal `preview`) ou `--profile production`.
+3. Publier : `eas update --channel preview --message "…"`, puis `--channel production` une fois vérifié.
+4. Correction importante (le téléphone propose de redémarrer tout de suite) : augmenter `extra.updateCriticalIndex`
+   dans `app.json` avant `eas update`.
+5. Revenir en arrière : `eas update:rollback`. Les versions ne vont qu'aux builds de même empreinte native
+   (`runtimeVersion: fingerprint`) : un nouveau module natif ou une nouvelle permission demande un nouveau build store.
 
 ## Lancer l'application
 
