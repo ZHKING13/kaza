@@ -26,11 +26,12 @@ import { Screen } from '@/components/Screen';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
 import { prorataRules } from '@/data/prorata';
-import { roleLabels, usePermissions, useStore } from '@/data/store';
+import { type OrganizationSubscription, plans } from '@/data/plans';
+import { roleLabels, usePermissions, usePlan, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { FormError } from '@/components/FormError';
 import { createAccountFromDemo } from '@/lib/demo';
-import { formatPhone } from '@/lib/format';
+import { formatDate, formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
 function Row({
@@ -73,11 +74,19 @@ function Row({
   );
 }
 
+function offerHint(s: OrganizationSubscription): string {
+  if (s.status === 'trial') return `Essai gratuit jusqu’au ${formatDate(s.endsAt!)} · voir les offres`;
+  if (s.status === 'active') return `Jusqu’au ${formatDate(s.endsAt!)} · prolonger ou changer`;
+  if (s.status === 'grace') return `À renouveler avant le ${formatDate(s.endsAt!)}`;
+  return 'Voir les offres payantes';
+}
+
 export default function Plus() {
   const { c, status } = useTheme();
-  const { settings, profile, mode, session, signOut, units, outbox, remote, organizations, organizationId, invitations, switchOrganization, identity } =
+  const { settings, profile, mode, session, signOut, outbox, remote, organizations, organizationId, invitations, switchOrganization, identity } =
     useStore();
   const { role, canAudit } = usePermissions();
+  const plan = usePlan();
   const [confirmOut, setConfirmOut] = useState(false);
   const [switchError, setSwitchError] = useState<string>();
   const current = organizations.find((o) => o.id === organizationId);
@@ -105,25 +114,34 @@ export default function Plus() {
         </View>
       </Card>
 
-      <View
-        style={{
-          backgroundColor: c.surface,
-          borderColor: c.accent,
-          borderWidth: 1,
-          borderRadius: radius.md,
-          padding: space.md,
-          flexDirection: 'row',
-          gap: space.sm,
-          alignItems: 'center',
-        }}>
-        <Crown size={24} color={c.accent} />
-        <View style={{ flex: 1 }}>
-          <Text variant="bodyStrong">Offre Pro · {units.length} unités sur 30</Text>
-          <Text variant="small" tone="muted">
-            Renouvellement le 1er novembre
-          </Text>
-        </View>
-      </View>
+      {plan.subscription ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/offre')}
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? c.surfaceAlt : c.surface,
+            borderColor: c.accent,
+            borderWidth: 1,
+            borderRadius: radius.md,
+            padding: space.md,
+            flexDirection: 'row',
+            gap: space.sm,
+            alignItems: 'center',
+          })}>
+          <Crown size={24} color={c.accent} />
+          <View style={{ flex: 1 }}>
+            <Text variant="bodyStrong">
+              Offre {plans[plan.subscription.effectivePlan].label}
+              {plan.subscription.status === 'trial' ? ' (essai)' : ''} · {plan.unitsUsed}
+              {plan.limits.units === null ? '' : ` logement${plan.unitsUsed > 1 ? 's' : ''} sur ${plan.limits.units}`}
+            </Text>
+            <Text variant="small" tone="muted">
+              {offerHint(plan.subscription)}
+            </Text>
+          </View>
+          <ChevronRight size={20} color={c.textMuted} />
+        </Pressable>
+      ) : null}
 
       {remote && current ? (
         <Card padded={false}>

@@ -6,7 +6,8 @@ import { AppState, Platform } from 'react-native';
 import { api, errorMessage, newIdempotencyKey } from '@/lib/api';
 import { endSession } from '@/lib/auth';
 import { isApiConfigured } from '@/lib/config';
-import { formatAmount, periodOf } from '@/lib/format';
+import { formatAmount, formatDate, periodOf } from '@/lib/format';
+import { showToast } from '@/lib/toast';
 
 import { countries, splitPhone } from './countries';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -15,6 +16,7 @@ import { storageKeyOf, toDataUri } from '@/lib/images';
 
 import { buildPayments, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
+import { type OrganizationSubscription, type PlanId, type PlanLimits, plans } from './plans';
 import { type ProrataRule, rentForPeriod } from './prorata';
 import {
   defaultLeaseSettings,
@@ -54,6 +56,8 @@ export type Settings = {
   onlinePayments?: boolean;
   /** Préavis par défaut et seuils des alertes (valeurs par défaut sans compte en ligne) */
   leases?: LeaseSettings;
+  /** Offre en vigueur de l'espace (compte en ligne) */
+  subscription?: OrganizationSubscription;
 };
 
 /**
@@ -120,6 +124,8 @@ type State = {
   settings: Settings;
   /** Identité imprimée sur les quittances de l'espace */
   identity: Identity;
+  /** Paiement d'offre parti chez l'agrégateur : suivi jusqu'à sa confirmation, même hors de l'écran Mon offre */
+  pendingSubscription: { invoiceId: string; plan: PlanId; orgId: string; since: string } | null;
   properties: Property[];
   units: Unit[];
   tenants: Tenant[];
@@ -159,6 +165,7 @@ type Action =
   | { type: 'updateTenant'; tenantId: string; patch: Partial<Tenant> }
   | { type: 'setUnitRent'; unitId: string; rent: number }
   | { type: 'setIdentity'; identity: Partial<Identity> }
+  | { type: 'setPendingSubscription'; pending: State['pendingSubscription'] }
   | { type: 'setPropertyPhoto'; propertyId: string; photo: string | undefined }
   | { type: 'recordDeparture'; tenantId: string; exitDate: string; settlement: Settlement; addPayments: Payment[]; removePaymentIds: string[] };
 
@@ -271,6 +278,7 @@ function reducer(state: State, action: Action): State {
           messaging: action.data.organization.messaging,
           onlinePayments: action.data.organization.onlinePaymentsEnabled ?? false,
           leases: action.data.organization.leases ?? state.settings.leases,
+          subscription: action.data.organization.subscription ?? state.settings.subscription,
         },
         properties: action.data.properties.map((p) => ({ ...p, photo: p.photo ?? photos.get(p.id) })),
         identity: identity ? mergeIdentity(state.identity, identity) : state.identity,
@@ -302,6 +310,8 @@ function reducer(state: State, action: Action): State {
       };
     case 'updateTenant':
       return { ...state, tenants: state.tenants.map((t) => (t.id === action.tenantId ? { ...t, ...action.patch } : t)) };
+    case 'setPendingSubscription':
+      return { ...state, pendingSubscription: action.pending };
     case 'setIdentity':
       return { ...state, identity: { ...state.identity, ...action.identity } };
     case 'setPropertyPhoto':
@@ -362,6 +372,8 @@ type Store = State & {
   /** Enregistre un préavis (Kaza ne le signifie pas au locataire) */
   giveNotice: (tenantId: string, notice: Notice) => Promise<void>;
   withdrawNotice: (tenantId: string) => Promise<void>;
+  /** Paiement d'offre ouvert chez l'agrégateur : confirmé par un message bref dès qu'il est reçu */
+  startSubscriptionPayment: (invoiceId: string, plan: PlanId) => void;
   /** Identité imprimée sur les quittances (propriétaire) */
   setIdentity: (fields: Partial<IdentityFields>) => Promise<void>;
   /** Logo ou cachet : data URI compressée, ou null pour l'enlever */
@@ -446,6 +458,7 @@ const PERSISTED = [
   'profile',
   'settings',
   'identity',
+  'pendingSubscription',
   'properties',
   'units',
   'tenants',
@@ -468,6 +481,7 @@ function emptyState(): State {
     profile: { firstName: '', lastName: '', phone: '' },
     settings: { prorata: 'full' },
     identity: emptyIdentity,
+    pendingSubscription: null,
     properties: [],
     units: [],
     tenants: [],
@@ -576,6 +590,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         settings: {
           ...(result.organization.messaging ? { messaging: result.organization.messaging } : {}),
           ...(result.organization.leases ? { leases: result.organization.leases } : {}),
+          ...(result.organization.subscription ? { subscription: result.organization.subscription } : {}),
           onlinePayments: result.organization.onlinePaymentsEnabled ?? false,
         },
       });
@@ -677,6 +692,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearTimeout(retryTimer.current);
     };
   }, []);
+
+  // Paiement d'offre en cours : on relit l'offre (et au retour dans l'application) jusqu'à la confirmation
+  useEffect(() => {
+    const pending = state.pendingSubscription;
+    if (!pending || !state.remote || !isApiConfigured) return;
+    let stopped = false;
+    const check = async () => {
+      if (Date.now() - Date.parse(pending.since) > 30 * 60_000) {
+        dispatch({ type: 'setPendingSubscription', pending: null });
+        return;
+      }
+      try {
+        const detail = await remote.subscription(pending.orgId);
+        if (stopped || !detail.invoices.some((i) => i.id === pending.invoiceId && i.status === 'paid')) return;
+        stopped = true;
+        dispatch({ type: 'setPendingSubscription', pending: null });
+        showToast(
+          `Paiement reçu : offre ${plans[pending.plan].label} active${detail.paidUntil ? ` jusqu’au ${formatDate(detail.paidUntil)}` : ''}.`,
+        );
+        if (organizationRef.current === pending.orgId) await loadRemote(pending.orgId).catch(() => {});
+      } catch {
+        // Pas de réseau : nouvel essai au prochain tour
+      }
+    };
+    void check();
+    const timer = setInterval(() => void check(), 5000);
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && void check());
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      sub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingSubscription, state.remote]);
 
   // Photos prises avant l'envoi au serveur (fichier du téléphone) : envoyées une fois, si le rôle le permet
   const migratedPhotos = useRef(new Set<string>());
@@ -1020,6 +1069,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
         return id;
+      },
+      startSubscriptionPayment: (invoiceId, plan) => {
+        if (!organizationRef.current) return;
+        const pending = { invoiceId, plan, orgId: organizationRef.current, since: new Date().toISOString() };
+        dispatch({ type: 'setPendingSubscription', pending });
+        // Enregistré tout de suite : l'application passe en arrière-plan dès l'ouverture de la page de paiement
+        const data = { ...Object.fromEntries(PERSISTED.map((k) => [k, stateRef.current[k]])), pendingSubscription: pending };
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
       },
       setIdentity: async (fields) => {
         const apply = () => dispatch({ type: 'setIdentity', identity: fields });
@@ -1425,6 +1482,21 @@ export function usePermissions() {
     canCollect: role !== 'viewer',
     /** Journal d'activité, invitations en attente */
     canAudit: role === 'owner' || role === 'manager',
+  };
+}
+
+/**
+ * Offre en vigueur et ses limites. Sans compte en ligne (démo, données sur le téléphone), rien n'est
+ * limité. Le serveur reste juge : ceci sert à prévenir avant d'agir.
+ */
+export function usePlan(): { subscription: OrganizationSubscription | null; limits: PlanLimits; unitsUsed: number } {
+  const { remote: isRemote, settings, units, properties } = useStore();
+  const subscription = isRemote ? (settings.subscription ?? null) : null;
+  const active = new Set(properties.map((p) => p.id));
+  return {
+    subscription,
+    limits: plans[subscription?.effectivePlan ?? 'agency'].limits,
+    unitsUsed: units.filter((u) => active.has(u.propertyId)).length,
   };
 }
 

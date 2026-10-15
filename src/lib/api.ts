@@ -38,6 +38,21 @@ type RequestOptions = {
 };
 
 let sessionExpiredHandler: (() => void) | null = null;
+
+/** Erreurs du serveur quand l'offre en vigueur ne permet pas l'action */
+export const planLimitKeys = ['unitsLimit', 'membersLimit', 'featureLocked', 'messagesQuota'] as const;
+export type PlanLimitError = ApiError & { data?: { suggestedPlan?: string | null; suggestedPlanLabel?: string | null } };
+const planLimitListeners = new Set<(error: PlanLimitError) => void>();
+
+/** Prévenu à chaque refus pour cause d'offre (l'application propose alors de changer d'offre). */
+export function onPlanLimit(listener: (error: PlanLimitError) => void): () => void {
+  planLimitListeners.add(listener);
+  return () => planLimitListeners.delete(listener);
+}
+
+export function isPlanLimit(error: unknown): error is PlanLimitError {
+  return error instanceof ApiError && (planLimitKeys as readonly string[]).includes(error.key);
+}
 let refreshing: Promise<boolean> | null = null;
 
 async function send<T>(method: string, path: string, { body, auth, idempotencyKey }: RequestOptions): Promise<T> {
@@ -69,12 +84,14 @@ async function send<T>(method: string, path: string, { body, auth, idempotencyKe
     data?: unknown;
   };
   if (!res.ok) {
-    throw new ApiError(
+    const error = new ApiError(
       json.message ?? 'Le serveur n’a pas pu traiter la demande. Réessayez.',
       json.statusCodeKey ?? 'unknown',
       res.status,
       (json.data ?? undefined) as Record<string, unknown> | undefined,
     );
+    if (isPlanLimit(error)) for (const listener of planLimitListeners) listener(error);
+    throw error;
   }
   return json.data as T;
 }
