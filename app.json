@@ -57,6 +57,13 @@
           "contactsPermission": "Kaza lit le contact que vous choisissez pour remplir la fiche du locataire."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0F766E",
+          "defaultChannel": "default"
+        }
+      ],
       "expo-sharing",
       "expo-secure-store"
     ],

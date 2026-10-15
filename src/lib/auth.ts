@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { ApiError, api, saveTokens, type Tokens } from './api';
 import { isApiConfigured } from './config';
 import { integrityOutcome, prepareProof } from './integrity';
+import { unregisterPush } from './push';
 import { tokens } from './tokens';
 import type { ApiUser } from '@/data/remote';
 
@@ -130,6 +131,8 @@ function deviceKind(): 'ios' | 'android' | 'web' {
 /** Ferme la session sur le serveur (si possible) puis oublie les jetons du téléphone. */
 export async function endSession(): Promise<void> {
   if (isApiConfigured && (tokens.getAccess() || (await tokens.getRefresh()))) {
+    // Avant la fermeture de la session : la requête a besoin du jeton
+    await unregisterPush();
     await api.post('/user/auth/logout', {}).catch(() => {});
   }
   await tokens.clear();

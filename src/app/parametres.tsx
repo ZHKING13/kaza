@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { BellRing } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Pressable, ScrollView, Switch, View } from 'react-native';
 
+import { Button } from '@/components/Button';
 import { Chip } from '@/components/Chip';
 import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
@@ -11,6 +13,7 @@ import { defaultLeaseSettings, type LeaseSettings } from '@/data/rent';
 import { usePermissions, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { formatAmount, formatPeriod, periodOf } from '@/lib/format';
+import { type PushCategory, type PushPermission, type PushSettings, pushApi, pushPermission, registerForPush } from '@/lib/push';
 import { radius, space, useTheme } from '@/theme';
 
 const ORDER: ProrataRule[] = ['full', 'daily', 'half'];
@@ -33,6 +36,7 @@ export default function Parametres() {
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.md, gap: space.md }}>
       <Stack.Screen options={{ title: 'Paramètres' }} />
+      {remote ? <NotificationsSection /> : null}
       {!isOwner ? (
         <Text variant="small" tone="muted" style={{ backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: space.sm }}>
           Seul le propriétaire de l’espace peut modifier ces réglages.
@@ -114,6 +118,121 @@ export default function Parametres() {
         </Text>
       </View>
     </ScrollView>
+  );
+}
+
+const PUSH_ROWS: { key: PushCategory; title: string; hint: string }[] = [
+  { key: 'payments', title: 'Paiements reçus', hint: 'Un locataire a payé par mobile money.' },
+  { key: 'late', title: 'Loyers en retard', hint: 'Un récapitulatif à 9 h, les jours où des loyers restent dus.' },
+  { key: 'lease', title: 'Fins de contrat et préavis', hint: '30 jours avant, 7 jours avant et le jour même.' },
+  { key: 'subscription', title: 'Mon offre', hint: 'Paiement confirmé, essai ou offre bientôt terminés.' },
+  { key: 'team', title: 'Équipe', hint: 'Une personne invitée a rejoint l’espace.' },
+  { key: 'teamPayments', title: 'Encaissements de l’équipe', hint: 'Chaque loyer saisi par un gérant ou un collecteur.' },
+];
+
+/** Notifications push de l'utilisateur (tous ses espaces, tous ses téléphones) ; état de l'autorisation sur ce téléphone. */
+function NotificationsSection() {
+  const { c } = useTheme();
+  const [value, setValue] = useState<PushSettings | null>(null);
+  const [permission, setPermission] = useState<PushPermission>('unsupported');
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let alive = true;
+    pushApi
+      .settings()
+      .then((v) => alive && setValue(v))
+      .catch((e) => alive && setError(errorMessage(e)));
+    pushPermission()
+      .then((p) => alive && setPermission(p))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const toggle = (key: PushCategory, on: boolean) => {
+    if (!value) return;
+    const before = value;
+    setError(undefined);
+    setValue({ ...value, [key]: on });
+    pushApi
+      .update({ [key]: on })
+      .then(setValue)
+      .catch((e) => {
+        setValue(before);
+        setError(errorMessage(e));
+      });
+  };
+  const enable = async () => {
+    setError(undefined);
+    try {
+      const result = await registerForPush(true);
+      setPermission(result);
+      setValue(await pushApi.settings());
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
+  const phoneState =
+    permission === 'denied' ? (
+      <View style={{ gap: space.xs, padding: space.md, borderRadius: radius.md, backgroundColor: c.surfaceAlt }}>
+        <Text variant="small">Les notifications de Kaza sont bloquées sur ce téléphone.</Text>
+        <Button label="Ouvrir les réglages du téléphone" variant="secondary" compact onPress={() => Linking.openSettings()} />
+      </View>
+    ) : permission === 'undetermined' ? (
+      <Button label="Activer sur ce téléphone" icon={BellRing} compact onPress={enable} />
+    ) : value && value.devices === 0 ? (
+      <Text variant="small" tone="muted" style={{ backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: space.sm }}>
+        Aucun téléphone ne reçoit encore vos notifications : ouvrez Kaza sur votre téléphone et acceptez-les.
+      </Text>
+    ) : null;
+
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={{ gap: 4, marginBottom: space.xxs }}>
+        <Text variant="h3" accessibilityRole="header">
+          Mes notifications
+        </Text>
+        <Text variant="small" tone="muted">
+          Sur votre téléphone, pour tous vos espaces, selon votre rôle dans chacun.
+          {value && value.devices > 0 ? ` ${value.devices > 1 ? `${value.devices} téléphones les reçoivent.` : '1 téléphone les reçoit.'}` : ''}
+        </Text>
+      </View>
+      {phoneState}
+      {value
+        ? PUSH_ROWS.map((row) => (
+            <View
+              key={row.key}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                padding: space.md,
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: c.surface,
+              }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="bodyStrong">{row.title}</Text>
+                <Text variant="small" tone="muted">
+                  {row.hint}
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel={row.title}
+                value={value[row.key]}
+                onValueChange={(on) => toggle(row.key, on)}
+                trackColor={{ true: c.primary, false: c.border }}
+                thumbColor={c.surface}
+              />
+            </View>
+          ))
+        : null}
+      <FormError message={error} />
+    </View>
   );
 }
 

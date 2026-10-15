@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Search, UserPlus, UserRound } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { Card } from '@/components/Card';
@@ -25,7 +25,12 @@ export default function Locataires() {
   const summaries = useTenantSummaries();
   const former = useFormerTenants();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  // Notification « loyers en retard » : la liste s'ouvre sur les retards
+  const { filtre } = useLocalSearchParams<{ filtre?: Filter }>();
+  const [filter, setFilter] = useState<Filter>(filtre ?? 'all');
+  useEffect(() => {
+    if (filtre) setFilter(filtre);
+  }, [filtre]);
 
   const count = (s: RentStatus) => summaries.filter((x) => x.status === s).length;
   const filters: { key: Filter; label: string }[] = [

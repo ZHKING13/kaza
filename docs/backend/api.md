@@ -238,6 +238,17 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
   « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
 - Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
 
+## Notifications push — **implémentées** (étape 11)
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| POST | `/user/me/push-devices` | `{ token: "ExponentPushToken[…]", platform: ios\|android, appVersion? }` | — | utilisateur | démarrage, « Activer les notifications » |
+| POST | `/user/me/push-devices/remove` | `{ token }` | — | utilisateur | déconnexion |
+| GET / PATCH | `/user/me/notification-settings` | `{ payments?, late?, lease?, subscription?, team?, teamPayments? }` | `{ …types, devices }` | utilisateur | Paramètres › Mes notifications |
+
+Notification : `title`, `body`, `data = { screen: tenant|late|subscription|team, organizationId, leaseId?, paymentId? }`.
+Envoi par le service push d'Expo ; un téléphone désinstallé est retiré seul. Jamais aux locataires.
+
 ## Abonnements — **implémentés** (étape 10)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
