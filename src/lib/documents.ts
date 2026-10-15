@@ -213,3 +213,40 @@ export function settlementHtml({ identity, settlement: s, exitDate, tenant, unit
     brand,
   );
 }
+
+type InvoiceArgs = {
+  invoice: {
+    number: string | null;
+    planLabel: string;
+    months: number;
+    amount: number;
+    paidAt: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+  };
+  /** Client : l'espace (raison sociale si renseignée) */
+  customer: { name: string; lines: string[] };
+};
+
+/** Facture d'abonnement Kaza (payée). */
+export function invoiceHtml({ invoice, customer }: InvoiceArgs) {
+  const period =
+    invoice.periodStart && invoice.periodEnd
+      ? `du ${formatDate(invoice.periodStart)} au ${formatDate(invoice.periodEnd)}`
+      : `${invoice.months} mois`;
+  return page(
+    `Facture ${invoice.number ?? ''}`,
+    `${header('Facture', invoice.number ? `N° ${invoice.number}` : '')}
+    <div class="parties">
+      <div class="box"><div class="label">Émise par</div><b>Kaza</b><br>Gestion locative</div>
+      <div class="box"><div class="label">Client</div><b>${esc(customer.name)}</b>${customer.lines.map((l) => `<br>${esc(l)}`).join('')}</div>
+    </div>
+    <table>
+      <tr><td>Abonnement Kaza, offre ${esc(invoice.planLabel)} (${invoice.months} mois)</td><td class="v">${esc(formatAmount(invoice.amount))}</td></tr>
+      <tr><td>Période</td><td class="v">${esc(period)}</td></tr>
+      <tr class="total"><td><b>Total payé</b></td><td class="v">${esc(formatAmount(invoice.amount))}</td></tr>
+    </table>
+    <p class="statement">${esc(amountWords(invoice.amount))}, payés par mobile money${invoice.paidAt ? ` le ${esc(formatDate(invoice.paidAt))}` : ''}.</p>
+    <div class="foot">Facture établie par Kaza.</div>`,
+  );
+}

@@ -8,6 +8,7 @@ import { Card } from '@/components/Card';
 import { Fab } from '@/components/Fab';
 import { KazaMark } from '@/components/KazaMark';
 import { LeaseAlerts } from '@/components/LeaseAlerts';
+import { OfferBanner } from '@/components/OfferBanner';
 import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
 import { DemoBanner } from '@/components/DemoBanner';
@@ -80,6 +81,7 @@ export default function Accueil() {
           </DemoBanner>
         ) : null}
         <SyncBanner />
+        <OfferBanner />
         {/* Résumé du mois : la réponse à « où en sont mes loyers ? » */}
         {summaries.length ? (
           <>

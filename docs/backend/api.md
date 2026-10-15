@@ -238,6 +238,19 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
   « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
 - Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
 
+## Abonnements — **implémentés** (étape 10)
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| GET | `…/subscription` | — | `Subscription` | tous | Plus › Mon offre |
+| POST | `…/subscription/checkout` | `{ plan: starter\|pro\|agency, months: 1\|3\|12 }` | `{ invoice, checkoutUrl }` | propriétaire | Mon offre › Choisir |
+| PUT | `/system/subscriptions/:organizationId` | `{ plan, paidUntil?, trialEndsAt? }` | `Subscription` | clé système | Back office |
+
+`Subscription = { plan, status: trial|active|grace|expired|free, effectivePlan, endsAt, daysLeft, trialEndsAt, paidUntil,
+limits, usage: { units, members, messagesThisMonth }, billingAvailable, catalog, invoices }`. L'espace (`/user/me`,
+snapshot) porte `subscription: { plan, status, effectivePlan, endsAt, daysLeft }`. Refus pour cause d'offre : 403
+`unitsLimit`, `membersLimit`, `featureLocked`, `messagesQuota`, avec `data.suggestedPlan` / `suggestedPlanLabel`.
+
 ## Identité de l'espace et images — **implémentées** (étape 9)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |

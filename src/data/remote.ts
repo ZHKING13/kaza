@@ -2,6 +2,7 @@ import { api } from '@/lib/api';
 import { imageForm } from '@/lib/images';
 import { periodOf } from '@/lib/format';
 
+import type { BillingMonths, OrganizationSubscription, PlanId, PlanLimits, SubscriptionStatus } from './plans';
 import type { ProrataRule } from './prorata';
 import { type LeaseSettings, type NoticeFrom, rentAt, tenantRent } from './rent';
 import type { Payment, PaymentMethod, Property, PropertyType, Settlement, Tenant, Unit } from './types';
@@ -48,6 +49,8 @@ export type ApiOrganization = {
   leases?: LeaseSettings;
   /** Liens de paiement mobile money disponibles (agrégateur configuré sur le serveur) */
   onlinePaymentsEnabled?: boolean;
+  /** Offre en vigueur (essai, payée, grâce, mode limité) */
+  subscription?: OrganizationSubscription;
   role: Role;
 };
 
@@ -68,6 +71,37 @@ export type IdentityFields = {
 export type ApiIdentity = IdentityFields & { logoUrl: string | null; stampUrl: string | null };
 
 export type ImageTarget = 'logo' | 'stamp' | 'property';
+
+/** Facture d'abonnement */
+export type SubscriptionInvoice = {
+  id: string;
+  plan: PlanId;
+  months: number;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'paid' | 'failed' | 'expired';
+  number: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+/** Offre de l'espace : en vigueur, usage, catalogue, factures payées */
+export type SubscriptionDetail = {
+  plan: PlanId;
+  status: SubscriptionStatus;
+  effectivePlan: PlanId;
+  endsAt: string | null;
+  daysLeft: number | null;
+  trialEndsAt: string | null;
+  paidUntil: string | null;
+  limits: PlanLimits;
+  usage: { units: number; members: number; messagesThisMonth: number };
+  billingAvailable: boolean;
+  catalog: { id: PlanId; label: string; monthlyPrice: number; prices: { months: number; amount: number }[]; limits: PlanLimits }[];
+  invoices: SubscriptionInvoice[];
+};
 
 /** Membre d'un espace */
 export type TeamMember = {
@@ -375,6 +409,14 @@ export const remote = {
     orgId: string,
     body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> },
   ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+
+  subscription: (orgId: string) => api.get<SubscriptionDetail>(`/user/organizations/${orgId}/subscription`),
+
+  subscriptionCheckout: (orgId: string, plan: PlanId, months: BillingMonths) =>
+    api.post<{ invoice: SubscriptionInvoice; checkoutUrl: string }>(`/user/organizations/${orgId}/subscription/checkout`, {
+      plan,
+      months,
+    }),
 
   identity: (orgId: string) => api.get<ApiIdentity>(`/user/organizations/${orgId}/identity`),
 

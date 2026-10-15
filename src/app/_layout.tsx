@@ -9,6 +9,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { PlanLimitSheet } from '@/components/PlanLimitSheet';
+import { ToastHost } from '@/components/ToastHost';
 import { StoreProvider, useStore } from '@/data/store';
 import { fonts, ThemeProvider, useTheme } from '@/theme';
 
@@ -60,10 +62,13 @@ function RootStack() {
           <Stack.Screen name="equipe" options={{ title: 'Équipe' }} />
           <Stack.Screen name="invitations" options={{ title: 'Invitations' }} />
           <Stack.Screen name="identite" options={{ title: 'Identité et quittances' }} />
+          <Stack.Screen name="offre" options={{ title: 'Mon offre' }} />
           <Stack.Screen name="journal" options={{ title: 'Journal d’activité' }} />
           <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
         </Stack.Protected>
       </Stack>
+      {signedIn ? <PlanLimitSheet /> : null}
+      <ToastHost />
     </>
   );
 }
