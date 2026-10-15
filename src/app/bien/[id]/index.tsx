@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Building2, Camera, DoorOpen, Plus, UserPlus, UserRound } from 'lucide-react-native';
+import { ArrowLeft, Building2, Camera, ChevronRight, DoorOpen, Handshake, Plus, UserPlus, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,18 +10,20 @@ import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
 import { PropertyCover } from '@/components/PropertyCover';
+import { PropertyExpenses } from '@/components/PropertyExpenses';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TenantRow } from '@/components/TenantRow';
 import { Text } from '@/components/Text';
 import { methods } from '@/data/methods';
 import { propertyTypes } from '@/data/propertyTypes';
+import { formatRate } from '@/data/expenses';
 import { usePermissions, usePropertySummaries, useStore } from '@/data/store';
 import { formatAmount, formatDate, formatNumber } from '@/lib/format';
 import { pickImage } from '@/lib/images';
 import { elevation, fonts, radius, space, useTheme } from '@/theme';
 
-type Tab = 'unites' | 'locataires' | 'historique';
+type Tab = 'unites' | 'locataires' | 'historique' | 'depenses';
 
 function Tile({ label, children }: { label: string; children: React.ReactNode }) {
   const { c } = useTheme();
@@ -54,7 +56,7 @@ export default function BienDetail() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { payments, setPropertyPhoto } = useStore();
+  const { payments, setPropertyPhoto, organizations, organizationId, remote: isRemote } = useStore();
   const { canManage, canCollect } = usePermissions();
   const s = usePropertySummaries().find((x) => x.property.id === id);
   const [tab, setTab] = useState<Tab>('unites');
@@ -174,11 +176,37 @@ export default function BienDetail() {
             Montants du mois en FCFA{outstanding > 0 ? ` · ${formatAmount(outstanding)} restent à encaisser` : ''}
           </Text>
 
+          {property.landlordName || (canManage && isRemote && organizations.find((o) => o.id === organizationId)?.type === 'agency') ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={!canManage}
+              onPress={() => router.push({ pathname: '/bien/[id]/mandant', params: { id: property.id } })}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                padding: space.sm,
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: pressed ? c.surfaceAlt : c.surface,
+              })}>
+              <Handshake size={18} color={c.primary} />
+              <Text variant="small" style={{ flex: 1 }} numberOfLines={2}>
+                {property.landlordName
+                  ? `Géré pour ${property.landlordName}${property.commissionBps ? ` · commission ${formatRate(property.commissionBps)}` : ''}`
+                  : 'Géré pour un propriétaire ? Indiquez-le pour son compte rendu de gestion.'}
+              </Text>
+              {canManage ? <ChevronRight size={18} color={c.textMuted} /> : null}
+            </Pressable>
+          ) : null}
+
           <SegmentedTabs
             tabs={[
               { key: 'unites', label: `Unités · ${s.units.length}` },
               { key: 'locataires', label: 'Locataires' },
-              { key: 'historique', label: 'Historique' },
+              { key: 'historique', label: 'Paiements' },
+              { key: 'depenses', label: 'Dépenses' },
             ]}
             value={tab}
             onChange={setTab}
@@ -259,6 +287,8 @@ export default function BienDetail() {
               )}
             </Card>
           ) : null}
+
+          {tab === 'depenses' ? <PropertyExpenses propertyId={property.id} /> : null}
 
           {tab === 'historique' ? (
             <Card padded={false}>

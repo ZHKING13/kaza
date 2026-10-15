@@ -7,6 +7,7 @@ import { api, errorMessage, newIdempotencyKey } from '@/lib/api';
 import { endSession } from '@/lib/auth';
 import { isApiConfigured } from '@/lib/config';
 import { formatAmount, formatDate, periodOf } from '@/lib/format';
+import { periodsBetween } from '@/lib/dates';
 import { showToast } from '@/lib/toast';
 
 import { countries, splitPhone } from './countries';
@@ -14,12 +15,14 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { storageKeyOf, toDataUri } from '@/lib/images';
 
-import { buildPayments, demoTenants, properties, units } from './mock';
+import { buildPayments, demoExpenses, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
 import { type OrganizationSubscription, type PlanId, type PlanLimits, plans } from './plans';
 import { type ProrataRule, rentForPeriod } from './prorata';
 import {
+  addMonthsToPeriod,
   defaultLeaseSettings,
+  fromCalendar,
   lastRentChange,
   type LeaseEnd,
   leaseEnd,
@@ -42,7 +45,20 @@ import {
   type RemoteData,
   type Role,
 } from './remote';
-import type { Notice, Payment, PaymentMethod, Property, RentRevision, Settlement, Tenant, TenantSummary, Unit } from './types';
+import { buildReport, type Report } from './report';
+import type {
+  Expense,
+  ExpenseSchedule,
+  Notice,
+  Payment,
+  PaymentMethod,
+  Property,
+  RentRevision,
+  Settlement,
+  Tenant,
+  TenantSummary,
+  Unit,
+} from './types';
 
 export type OrganizationSummary = { id: string; name: string; role: Role; type?: 'individual' | 'agency' };
 
@@ -130,6 +146,9 @@ type State = {
   units: Unit[];
   tenants: Tenant[];
   payments: Payment[];
+  expenses: Expense[];
+  /** Dépenses qui reviennent chaque mois, en cours */
+  expenseSchedules: ExpenseSchedule[];
 };
 
 type Action =
@@ -167,6 +186,11 @@ type Action =
   | { type: 'setIdentity'; identity: Partial<Identity> }
   | { type: 'setPendingSubscription'; pending: State['pendingSubscription'] }
   | { type: 'setPropertyPhoto'; propertyId: string; photo: string | undefined }
+  | { type: 'addExpenses'; expenses: Expense[]; schedule?: ExpenseSchedule }
+  | { type: 'updateExpense'; expenseId: string; patch: Partial<Expense> }
+  | { type: 'removeExpense'; expenseId: string }
+  | { type: 'stopExpenseSchedule'; scheduleId: string }
+  | { type: 'updateProperty'; propertyId: string; patch: Partial<Property> }
   | { type: 'recordDeparture'; tenantId: string; exitDate: string; settlement: Settlement; addPayments: Payment[]; removePaymentIds: string[] };
 
 export type NewUnit = Pick<Unit, 'label' | 'rent'>;
@@ -212,6 +236,8 @@ function reducer(state: State, action: Action): State {
         units: [],
         tenants: [],
         payments: [],
+        expenses: [],
+        expenseSchedules: [],
         syncedAt: null,
         settings: { prorata: 'full' },
         identity: emptyIdentity,
@@ -226,6 +252,8 @@ function reducer(state: State, action: Action): State {
         units: [],
         tenants: [],
         payments: [],
+        expenses: [],
+        expenseSchedules: [],
         syncedAt: null,
         outbox: [],
         settings: { prorata: 'full' },
@@ -285,6 +313,8 @@ function reducer(state: State, action: Action): State {
         units: action.data.units,
         tenants: action.data.tenants,
         payments: action.data.payments,
+        expenses: action.data.expenses,
+        expenseSchedules: action.data.expenseSchedules,
         syncedAt: action.syncedAt,
       };
     }
@@ -319,6 +349,22 @@ function reducer(state: State, action: Action): State {
         ...state,
         properties: state.properties.map((p) => (p.id === action.propertyId ? { ...p, photo: action.photo } : p)),
       };
+    case 'addExpenses': {
+      const known = new Set(state.expenses.map((e) => e.id));
+      return {
+        ...state,
+        expenses: [...action.expenses.filter((e) => !known.has(e.id)), ...state.expenses],
+        expenseSchedules: action.schedule ? [...state.expenseSchedules, action.schedule] : state.expenseSchedules,
+      };
+    }
+    case 'updateExpense':
+      return { ...state, expenses: state.expenses.map((e) => (e.id === action.expenseId ? { ...e, ...action.patch } : e)) };
+    case 'removeExpense':
+      return { ...state, expenses: state.expenses.filter((e) => e.id !== action.expenseId) };
+    case 'stopExpenseSchedule':
+      return { ...state, expenseSchedules: state.expenseSchedules.filter((x) => x.id !== action.scheduleId) };
+    case 'updateProperty':
+      return { ...state, properties: state.properties.map((p) => (p.id === action.propertyId ? { ...p, ...action.patch } : p)) };
     case 'setUnitRent':
       return { ...state, units: state.units.map((u) => (u.id === action.unitId ? { ...u, rent: action.rent } : u)) };
     case 'recordDeparture': {
@@ -382,6 +428,17 @@ type Store = State & {
   setPropertyPhoto: (propertyId: string, uri: string | null) => Promise<void>;
   /** Annule un paiement (erreur de saisie, argent non reçu…) : il disparaît des montants encaissés. */
   voidPayment: (paymentId: string, reason: string) => Promise<void>;
+  /** Enregistre une dépense (et la dépense mensuelle si `repeatMonthly`), renvoie son identifiant */
+  addExpense: (input: NewExpense) => Promise<string>;
+  updateExpense: (expenseId: string, patch: ExpensePatch) => Promise<void>;
+  /** Annule une dépense (gardée sur le serveur avec son motif) */
+  voidExpense: (expenseId: string, reason: string) => Promise<void>;
+  /** Photo du justificatif : data URI compressée, ou null pour l'enlever */
+  setExpenseReceipt: (expenseId: string, uri: string | null) => Promise<void>;
+  /** Arrête une dépense mensuelle (les mois déjà créés restent) */
+  stopExpenseSchedule: (scheduleId: string) => Promise<void>;
+  /** Propriétaire du bien (mandant) et commission du gestionnaire */
+  setLandlord: (propertyId: string, landlord: Landlord) => Promise<void>;
   /** Ouvre un autre espace du compte (refusé tant que des enregistrements attendent d'être envoyés) */
   switchOrganization: (organizationId: string) => Promise<void>;
   /** Rejoint l'espace qui a invité ce numéro, et l'ouvre */
@@ -393,6 +450,16 @@ type Store = State & {
   retryOutbox: () => void;
   dismissOutboxFailures: () => void;
 };
+
+export type NewExpense = Omit<Expense, 'id' | 'scheduleId' | 'receipt'> & {
+  repeatMonthly: boolean;
+  /** Photo du justificatif (data URI) */
+  receipt?: string;
+};
+
+export type ExpensePatch = Partial<Pick<Expense, 'unitId' | 'category' | 'amount' | 'date' | 'method' | 'supplier' | 'note'>>;
+
+export type Landlord = { landlordName?: string; landlordPhone?: string; commissionBps?: number };
 
 export type Departure = {
   tenantId: string;
@@ -463,6 +530,8 @@ const PERSISTED = [
   'units',
   'tenants',
   'payments',
+  'expenses',
+  'expenseSchedules',
   'outbox',
   'outboxFailures',
 ] as const;
@@ -486,6 +555,8 @@ function emptyState(): State {
     units: [],
     tenants: [],
     payments: [],
+    expenses: [],
+    expenseSchedules: [],
     outbox: [],
     outboxFailures: [],
   };
@@ -501,6 +572,7 @@ function demoState(today: Date): Partial<State> {
     units,
     tenants: demoTenants(today),
     payments: buildPayments(today),
+    ...demoExpenses(today),
   };
 }
 
@@ -760,6 +832,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .catch(() => {});
     }
   }, [state.hydrated, state.remote, state.organizationId, state.organizations, state.properties]);
+
+  // Sans compte en ligne (démo, données du téléphone) : le téléphone crée lui-même les dépenses mensuelles
+  useEffect(() => {
+    if (!state.hydrated || state.remote || state.expenseSchedules.length === 0) return;
+    const todayIso = calendarDate(today.toISOString());
+    const created: Expense[] = [];
+    for (const schedule of state.expenseSchedules) {
+      for (const period of periodsBetween(addMonthsToPeriod(schedule.startPeriod, 1), todayIso.slice(0, 7))) {
+        const day = `${period}-${String(schedule.dayOfMonth).padStart(2, '0')}`;
+        if (day > todayIso) continue;
+        const id = `${schedule.id}-${period}`;
+        if (state.expenses.some((e) => e.id === id || (e.scheduleId === schedule.id && calendarDate(e.date).startsWith(period)))) continue;
+        const { dayOfMonth: _d, startPeriod: _s, id: _id, ...fields } = schedule;
+        created.push({ ...fields, id, scheduleId: schedule.id, date: fromCalendar(day) });
+      }
+    }
+    if (created.length) dispatch({ type: 'addExpenses', expenses: created });
+  }, [state.hydrated, state.remote, state.expenseSchedules, state.expenses, today]);
 
   // Sauvegarde après chaque changement (regroupé sur 300 ms)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -1244,6 +1334,159 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
       },
+      addExpense: async ({ repeatMonthly, receipt, ...input }) => {
+        const id = newId();
+        const expense: Expense = { ...input, id };
+        const property = state.properties.find((p) => p.id === input.propertyId);
+        const date = calendarDate(input.date);
+        const schedule: ExpenseSchedule | undefined = repeatMonthly
+          ? {
+              id: newId(),
+              propertyId: input.propertyId,
+              unitId: input.unitId,
+              category: input.category,
+              amount: input.amount,
+              method: input.method,
+              supplier: input.supplier,
+              note: input.note,
+              dayOfMonth: Math.min(Number(date.slice(8, 10)), 28),
+              startPeriod: date.slice(0, 7),
+            }
+          : undefined;
+        const apply = () =>
+          dispatch({ type: 'addExpenses', expenses: [{ ...expense, scheduleId: schedule?.id, receipt }], schedule });
+        const label = `Dépense de ${formatAmount(input.amount)} (${property?.name ?? 'bien'})`;
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'createExpense',
+              orgId,
+              body: {
+                id,
+                propertyId: input.propertyId,
+                unitId: input.unitId,
+                category: input.category,
+                amount: input.amount,
+                date,
+                method: input.method,
+                supplier: input.supplier,
+                note: input.note,
+                repeatMonthly,
+              },
+              label,
+            },
+            apply,
+          );
+          if (receipt) {
+            await write({ kind: 'putImage', orgId, target: 'expense', propertyId: id, uri: receipt, label: `Justificatif : ${label}` }, () => {});
+          }
+          return id;
+        }
+        apply();
+        return id;
+      },
+      updateExpense: async (expenseId, patch) => {
+        const apply = () => dispatch({ type: 'updateExpense', expenseId, patch });
+        if (online) {
+          const orgId = await ensureOrganization();
+          const has = (k: keyof ExpensePatch) => Object.prototype.hasOwnProperty.call(patch, k);
+          await write(
+            {
+              kind: 'updateExpense',
+              orgId,
+              expenseId,
+              body: {
+                ...(has('unitId') ? { unitId: patch.unitId ?? null } : {}),
+                ...(patch.category ? { category: patch.category } : {}),
+                ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+                ...(patch.date ? { date: calendarDate(patch.date) } : {}),
+                ...(patch.method ? { method: patch.method } : {}),
+                ...(has('supplier') ? { supplier: patch.supplier || null } : {}),
+                ...(has('note') ? { note: patch.note || null } : {}),
+              },
+              label: `Dépense modifiée${patch.amount ? ` (${formatAmount(patch.amount)})` : ''}`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      voidExpense: async (expenseId, reason) => {
+        const apply = () => dispatch({ type: 'removeExpense', expenseId });
+        if (online) {
+          const expense = state.expenses.find((e) => e.id === expenseId);
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'voidExpense',
+              orgId,
+              expenseId,
+              reason,
+              label: `Annulation d’une dépense${expense ? ` de ${formatAmount(expense.amount)}` : ''}`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      setExpenseReceipt: async (expenseId, uri) => {
+        const apply = () => dispatch({ type: 'updateExpense', expenseId, patch: { receipt: uri ?? undefined } });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            uri
+              ? { kind: 'putImage', orgId, target: 'expense', propertyId: expenseId, uri, label: 'Justificatif d’une dépense' }
+              : { kind: 'deleteImage', orgId, target: 'expense', propertyId: expenseId, label: 'Justificatif retiré' },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      stopExpenseSchedule: async (scheduleId) => {
+        const apply = () => dispatch({ type: 'stopExpenseSchedule', scheduleId });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write({ kind: 'stopExpenseSchedule', orgId, scheduleId, label: 'Dépense mensuelle arrêtée' }, apply);
+          return;
+        }
+        apply();
+      },
+      setLandlord: async (propertyId, landlord) => {
+        const apply = () =>
+          dispatch({
+            type: 'updateProperty',
+            propertyId,
+            patch: {
+              landlordName: landlord.landlordName || undefined,
+              landlordPhone: landlord.landlordPhone || undefined,
+              commissionBps: landlord.commissionBps || undefined,
+            },
+          });
+        if (online) {
+          const orgId = await ensureOrganization();
+          const property = state.properties.find((p) => p.id === propertyId);
+          await write(
+            {
+              kind: 'updateLandlord',
+              orgId,
+              propertyId,
+              body: {
+                landlordName: landlord.landlordName || null,
+                landlordPhone: landlord.landlordPhone || null,
+                commissionBps: landlord.commissionBps || null,
+              },
+              label: `Propriétaire de « ${property?.name ?? 'bien'} »`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
       recordDeparture: async ({ tenantId, exitDate, deductArrears, deductions, refundMethod }) => {
         const tenant = state.tenants.find((t) => t.id === tenantId)!;
         const rent = tenantRent(tenant, state.units.find((u) => u.id === tenant.unitId)!);
@@ -1506,3 +1749,36 @@ export const roleLabels: Record<Role, string> = {
   collector: 'Collecteur',
   viewer: 'Lecteur',
 };
+
+/** Dépenses (non annulées) d'un bien, ou de tous les biens, de la plus récente à la plus ancienne. */
+export function useExpenses(propertyId?: string): Expense[] {
+  const { expenses } = useStore();
+  return useMemo(
+    () => expenses.filter((e) => !propertyId || e.propertyId === propertyId).sort((a, b) => b.date.localeCompare(a.date)),
+    [expenses, propertyId],
+  );
+}
+
+/**
+ * Relevé (ou compte rendu) sur une période, pour tous les biens ou certains : calcul partagé `buildReport`,
+ * à partir des données du téléphone (hors ligne compris).
+ */
+export function useReport(from: string, to: string, propertyIds?: string[]): Report {
+  const { properties, units, tenants, payments, expenses, settings } = useStore();
+  return useMemo(() => {
+    const chosen = properties.filter((p) => !propertyIds || propertyIds.includes(p.id));
+    const unitById = new Map(units.map((u) => [u.id, u]));
+    return buildReport({
+      properties: chosen.map((p) => ({ id: p.id, name: p.name, commissionBps: p.commissionBps })),
+      leases: tenants.flatMap((t) => {
+        const unit = unitById.get(t.unitId);
+        return unit ? [{ id: t.id, propertyId: unit.propertyId, rent: tenantRent(t, unit), entryDate: t.entryDate, exitDate: t.exitDate }] : [];
+      }),
+      payments: payments.map((p) => ({ leaseId: p.tenantId, amount: p.amount, period: p.period })),
+      expenses,
+      from,
+      to,
+      rule: settings.prorata,
+    });
+  }, [properties, units, tenants, payments, expenses, settings.prorata, from, to, propertyIds]);
+}

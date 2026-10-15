@@ -5,8 +5,11 @@ import type { LeaseSettings } from './rent';
 import {
   type ApiOrganization,
   type DepartureBody,
+  type ExpenseBody,
+  type ExpenseUpdateBody,
   type IdentityFields,
   type ImageTarget,
+  type LandlordBody,
   type LeaseBody,
   type MessagingSettings,
   type NoticeBody,
@@ -50,7 +53,12 @@ export type OutboxOp =
   | { kind: 'updateIdentity'; orgId: string; body: Partial<IdentityFields> }
   /** `uri` : image compressée (data URI) ou fichier local */
   | { kind: 'putImage'; orgId: string; target: ImageTarget; propertyId?: string; uri: string }
-  | { kind: 'deleteImage'; orgId: string; target: ImageTarget; propertyId?: string };
+  | { kind: 'deleteImage'; orgId: string; target: ImageTarget; propertyId?: string }
+  | { kind: 'createExpense'; orgId: string; body: ExpenseBody }
+  | { kind: 'updateExpense'; orgId: string; expenseId: string; body: ExpenseUpdateBody }
+  | { kind: 'voidExpense'; orgId: string; expenseId: string; reason: string }
+  | { kind: 'stopExpenseSchedule'; orgId: string; scheduleId: string }
+  | { kind: 'updateLandlord'; orgId: string; propertyId: string; body: LandlordBody };
 
 export type OutboxEntry = OutboxOp & {
   /** Clé Idempotency-Key, identique à chaque tentative */
@@ -132,6 +140,21 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       return { kind: 'done' };
     case 'deleteImage':
       await remote.deleteImage(entry.orgId, entry.target, entry.propertyId);
+      return { kind: 'done' };
+    case 'createExpense':
+      await remote.createExpense(entry.orgId, entry.body);
+      return { kind: 'done' };
+    case 'updateExpense':
+      await remote.updateExpense(entry.orgId, entry.expenseId, entry.body);
+      return { kind: 'done' };
+    case 'voidExpense':
+      await remote.voidExpense(entry.orgId, entry.expenseId, entry.reason);
+      return { kind: 'done' };
+    case 'stopExpenseSchedule':
+      await remote.stopExpenseSchedule(entry.orgId, entry.scheduleId);
+      return { kind: 'done' };
+    case 'updateLandlord':
+      await remote.updateLandlord(entry.orgId, entry.propertyId, entry.body);
       return { kind: 'done' };
   }
 }

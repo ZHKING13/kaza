@@ -1,13 +1,22 @@
 import { periodOf } from '@/lib/format';
 
-import type { Unit, Payment, PaymentMethod, Property, Tenant } from './types';
+import type { Expense, ExpenseSchedule, Payment, PaymentMethod, Property, Tenant, Unit } from './types';
 
 /** Données d'exemple : 3 biens à Abidjan, 19 unités, 17 locataires. */
 
 export const properties: Property[] = [
   { id: 'p1', name: 'Résidence Les Palmiers', type: 'immeuble', district: 'Cocody Angré', city: 'Abidjan' },
   { id: 'p2', name: 'Cour commune Yopougon', type: 'cour', district: 'Yopougon Selmer', city: 'Abidjan' },
-  { id: 'p3', name: 'Immeuble Marcory', type: 'immeuble', district: 'Marcory Zone 4', city: 'Abidjan' },
+  {
+    id: 'p3',
+    name: 'Immeuble Marcory',
+    type: 'immeuble',
+    district: 'Marcory Zone 4',
+    city: 'Abidjan',
+    landlordName: 'Mme Aya Bamba',
+    landlordPhone: '+2250701020304',
+    commissionBps: 1000,
+  },
 ];
 
 const unit = (id: string, propertyId: string, label: string, rent: number): Unit => ({ id, propertyId, label, rent });
@@ -124,4 +133,41 @@ export function buildPayments(today: Date): Payment[] {
   add('t17', 0, d(7), 'cash', 0.5);
 
   return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** Dépenses de démonstration : gardien chaque mois, travaux, charges, impôt foncier. */
+export function demoExpenses(today: Date): { expenses: Expense[]; expenseSchedules: ExpenseSchedule[] } {
+  const at = (monthsAgo: number, day: number) => new Date(today.getFullYear(), today.getMonth() - monthsAgo, day, 12).toISOString();
+  const start = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  const startPeriod = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+  const caretaker: ExpenseSchedule = {
+    id: 'es1',
+    propertyId: 'p1',
+    category: 'caretaker',
+    amount: 40000,
+    method: 'mobile_money',
+    supplier: 'Gardien Koffi',
+    dayOfMonth: 5,
+    startPeriod,
+  };
+  const months = Array.from({ length: 6 }, (_, i) => 5 - i).filter((m) => m > 0 || today.getDate() >= 5);
+  return {
+    expenseSchedules: [caretaker],
+    expenses: [
+      ...months.map((m) => ({
+        id: `ec${m}`,
+        propertyId: 'p1',
+        category: 'caretaker' as const,
+        amount: 40000,
+        date: at(m, 5),
+        method: 'mobile_money' as const,
+        supplier: 'Gardien Koffi',
+        scheduleId: 'es1',
+      })),
+      { id: 'ex1', propertyId: 'p1', unitId: 'l4', category: 'works', amount: 65000, date: at(1, 18), method: 'cash', supplier: 'Plomberie Yao', note: 'Fuite salle de bain B2' },
+      { id: 'ex2', propertyId: 'p2', category: 'utilities', amount: 28500, date: at(0, 3), method: 'mobile_money', supplier: 'CIE', note: 'Électricité des parties communes' },
+      { id: 'ex3', propertyId: 'p3', category: 'maintenance', amount: 45000, date: at(2, 10), method: 'cash', supplier: 'Peinture Cissé', note: 'Cage d’escalier' },
+      { id: 'ex4', propertyId: 'p3', category: 'taxes', amount: 180000, date: at(3, 28), method: 'bank', note: 'Impôt foncier' },
+    ],
+  };
 }
