@@ -127,7 +127,11 @@ Fonctionnement en mode serveur :
 
 1. Compte Expo, puis `npx eas init` : ajoute `extra.eas.projectId` à `app.json` (l'application lit cet identifiant).
 2. Android : projet Firebase, application `africa.kaza.app`, clé de compte de service FCM v1 envoyée à Expo
-   (`eas credentials` › Android › Push Notifications).
+   (`eas credentials` › Android › Push Notifications). `google-services.json` n'est pas versionné (`.gitignore`) :
+   - en local, posez-le à la racine du dépôt ;
+   - pour EAS Build, envoyez-le une fois comme variable de type fichier, lue par `app.config.js` :
+     `eas env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --environment development --environment preview --environment production --visibility secret`
+   - la clé du compte de service (`*-firebase-adminsdk-*.json`) ne quitte jamais votre machine et Expo.
 3. iOS : compte Apple Developer ; `eas build` crée la clé APNs et le profil avec l'autorisation « Push Notifications ».
 4. Serveur : `PUSH_PROVIDER=expo` (défaut en production) ; `EXPO_ACCESS_TOKEN` seulement si la « sécurité renforcée »
    des notifications est activée sur le projet Expo.
