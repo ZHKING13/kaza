@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { PushBridge } from '@/components/PushBridge';
 import { PlanLimitSheet } from '@/components/PlanLimitSheet';
 import { ToastHost } from '@/components/ToastHost';
 import { StoreProvider, useStore } from '@/data/store';
@@ -18,7 +19,7 @@ SplashScreen.preventAutoHideAsync();
 
 function RootStack() {
   const { c, scheme } = useTheme();
-  const { session, onboarded } = useStore();
+  const { session, onboarded, remote } = useStore();
   const signedIn = !!session;
   return (
     <>
@@ -68,6 +69,7 @@ function RootStack() {
         </Stack.Protected>
       </Stack>
       {signedIn ? <PlanLimitSheet /> : null}
+      {signedIn && onboarded && remote ? <PushBridge /> : null}
       <ToastHost />
     </>
   );

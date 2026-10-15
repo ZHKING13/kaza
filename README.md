@@ -96,10 +96,28 @@ Fonctionnement en mode serveur :
   l'échéance, puis offre gratuite sans rien effacer (consulter, encaisser, imprimer restent possibles). Plus › Mon offre :
   usage (logements, équipe, messages du mois), choix de l'offre et de la durée, paiement par mobile money (page de
   l'agrégateur, l'offre se met à jour d'elle-même), factures PDF. Le paiement est suivi même si l'on quitte l'écran ou l'application : un message bref confirme l'offre
-  dès que le paiement est reçu (en attendant les notifications push). Quand le serveur refuse une action pour cause d'offre,
+  dès que le paiement est reçu (et une notification push si l'application est fermée). Quand le serveur refuse une action pour cause d'offre,
   une fenêtre propose l'offre qui la permet. Bandeau sur l'accueil : fin d'essai proche, offre échue, limites dépassées.
+- **Notifications push** (étape 11, téléphones Android et iOS, compte en ligne) : paiement en ligne reçu, récapitulatif
+  des loyers en retard à 9 h, fin de contrat et préavis à J-30, J-7 et le jour J, offre payée ou bientôt échue, membre qui
+  rejoint l'espace, encaissements de l'équipe (désactivés par défaut). Destinataires selon le rôle dans l'espace. Carte
+  « Activer les notifications » sur l'accueil (une fois ; « Plus tard » la masque), réglages par type dans Paramètres ›
+  Mes notifications. Application ouverte : un message bref et les chiffres se mettent à jour ; notification touchée :
+  le bon écran s'ouvre (fiche du locataire, retards, Mon offre, Équipe), dans le bon espace. La déconnexion arrête les
+  notifications sur ce téléphone. Prérequis : un build EAS (pas Expo Go) et `extra.eas.projectId` dans `app.json`
+  (voir « Notifications push » ci-dessous) ; sans eux, rien n'est demandé.
 - **Session** : expirée ou révoquée → retour à l'écran de connexion. « Se déconnecter » révoque la session sur le serveur.
 - **Pas encore** en mode serveur : connexion Google / Apple (boutons masqués).
+
+## Notifications push : mise en place
+
+1. Compte Expo, puis `npx eas init` : ajoute `extra.eas.projectId` à `app.json` (l'application lit cet identifiant).
+2. Android : projet Firebase, application `africa.kaza.app`, clé de compte de service FCM v1 envoyée à Expo
+   (`eas credentials` › Android › Push Notifications).
+3. iOS : compte Apple Developer ; `eas build` crée la clé APNs et le profil avec l'autorisation « Push Notifications ».
+4. Serveur : `PUSH_PROVIDER=expo` (défaut en production) ; `EXPO_ACCESS_TOKEN` seulement si la « sécurité renforcée »
+   des notifications est activée sur le projet Expo.
+5. Build de développement (`eas build --profile development`) pour essayer : Expo Go ne reçoit pas ces notifications.
 
 ## Lancer l'application
 

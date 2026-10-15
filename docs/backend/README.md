@@ -143,8 +143,9 @@ Reste : départ et solde côté serveur, photos (stockage objet), connexion Goog
 | 6 | Mobile money : liens de paiement, interface commune d'agrégateur, rapprochement (webhook et passage régulier) — **fait** avec un agrégateur de test ; reste à brancher l'agrégateur choisi et les reversements | Paiement par lien |
 | 7 | Gérants et agences : invitations par numéro, rôles, plusieurs espaces par compte, journal d'activité — **fait** (modèle WhatsApp `kaza_invitation` à faire approuver) | Offre Pro / Agence |
 | 8 | Cycle de vie du bail : loyer daté et révisions (domaine 0.4.0), date de fin, préavis, alertes « Fin de contrat proche » et « Révision de loyer » — **fait** (modèle WhatsApp `kaza_rent_revision` à faire approuver) | Baux suivis jusqu'au départ |
-| 10 | Abonnements : offres Gratuit / Bailleur / Pro / Agence (domaine 0.6.0), essai, grâce, mode limité, limites appliquées par le serveur, paiement des offres par mobile money, factures, rappels au propriétaire, back office — **fait** (modèle WhatsApp `kaza_subscription` à faire approuver) | Revenus |
 | 9 | Identité de l'espace et images : stockage (disque local / S3 privé, liens signés), quittances personnalisées (logo, couleur, mentions, cachet), photos des biens envoyées au serveur — **fait** | Offre agences |
+| 10 | Abonnements : offres Gratuit / Bailleur / Pro / Agence (domaine 0.6.0), essai, grâce, mode limité, limites appliquées par le serveur, paiement des offres par mobile money, factures, rappels au propriétaire, back office — **fait** (modèle WhatsApp `kaza_subscription` à faire approuver) | Revenus |
+| 11 | Notifications push (service d'Expo) : téléphones des utilisateurs, réglages par type, paiement en ligne reçu, récapitulatif des retards à 9 h, fins de bail, offre, équipe ; rappels d'offre par push avant WhatsApp — **fait** (projet EAS, FCM et APNs à configurer) | Le bailleur est prévenu sans ouvrir l'application |
 
 Tests à écrire en priorité : règles de `packages/domain` (prorata, solde de départ), contraintes d'accès par organisation,
 idempotence des paiements, rejeu de webhook.
