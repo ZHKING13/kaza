@@ -42,3 +42,5 @@ yarn-error.*
 
 # Configuration locale du serveur
 .env
+kaza-c7132-firebase-adminsdk-fbsvc-b5857b9cca.json
+docs/agents/
