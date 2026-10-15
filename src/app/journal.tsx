@@ -55,6 +55,12 @@ export function describeActivity(e: ActivityEntry): string {
       return `${who} a enregistré un préavis ${d.from === 'landlord' ? 'du bailleur' : 'du locataire'} pour ${subject} : départ prévu le ${typeof d.exitDate === 'string' ? formatDate(d.exitDate) : ''}`;
     case 'lease.notice_withdrawn':
       return `${who} a retiré le préavis de ${subject}`;
+    case 'organization.identity_updated': {
+      const fields = Array.isArray(d.fields) ? (d.fields as string[]) : [];
+      if (fields.includes('logo')) return `${who} a ${d.removed ? 'retiré' : 'changé'} le logo des quittances`;
+      if (fields.includes('stamp')) return `${who} a ${d.removed ? 'retiré' : 'changé'} la signature ou le cachet`;
+      return `${who} a modifié l’identité imprimée sur les quittances`;
+    }
     case 'lease.ended':
       return `${who} a enregistré le départ de ${subject}`;
     case 'invitation.created':

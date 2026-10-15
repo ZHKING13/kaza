@@ -8,7 +8,7 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { FormError } from '@/components/FormError';
-import { KazaMark } from '@/components/KazaMark';
+import { ReceiptHeader, useReceiptBrand } from '@/components/ReceiptHeader';
 import { KazaSendButton } from '@/components/KazaSendButton';
 import { PdfButton } from '@/components/PdfButton';
 import { useServerMessaging } from '@/data/messages';
@@ -96,6 +96,7 @@ export default function Quittance() {
   const { canManage } = usePermissions();
   const { id } = useLocalSearchParams<{ id: string }>();
   const r = useReceipt(id);
+  const { color: brandSoft } = useReceiptBrand();
 
   if (!r) return <EmptyState icon={FileText} title="Paiement introuvable" body="Ce paiement a peut-être été annulé." />;
 
@@ -110,22 +111,21 @@ export default function Quittance() {
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.md, gap: space.md, paddingBottom: space.xxl }}>
       <Stack.Screen options={{ title: full ? 'Quittance' : 'Reçu partiel' }} />
       <Card style={{ gap: space.sm }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.sm }}>
-          <KazaMark size={28} />
-          <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-            <Text variant="h3" tone="primary">
-              {full ? 'Quittance de loyer' : 'Reçu de paiement partiel'}
-            </Text>
-            <Text variant="caption" tone="muted">
-              N° {receiptNumber(payment)}
-            </Text>
-          </View>
-        </View>
-        <View style={{ backgroundColor: c.primarySoft, borderRadius: radius.md, padding: space.sm, gap: 2 }}>
-          <Text variant="amountXL" style={{ fontSize: 26, lineHeight: 34 }}>
+        <ReceiptHeader title={full ? 'Quittance de loyer' : 'Reçu de paiement partiel'} number={`N° ${receiptNumber(payment)}`} />
+        <View
+          style={{
+            backgroundColor: brandSoft.soft,
+            borderWidth: 1,
+            borderColor: brandSoft.line,
+            borderRadius: radius.md,
+            padding: space.sm,
+            gap: 2,
+          }}>
+          {/* Encadré clair, comme sur le papier : texte foncé même en mode sombre */}
+          <Text variant="amountXL" color="#0F172A" style={{ fontSize: 26, lineHeight: 34 }}>
             {formatAmount(payment.amount)}
           </Text>
-          <Text variant="small" tone="muted">
+          <Text variant="small" color="#475569">
             {words.charAt(0).toUpperCase() + words.slice(1)} francs CFA
           </Text>
         </View>

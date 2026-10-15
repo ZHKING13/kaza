@@ -1,4 +1,5 @@
 import {
+  Stamp,
   Building2,
   ChevronRight,
   Crown,
@@ -74,7 +75,7 @@ function Row({
 
 export default function Plus() {
   const { c, status } = useTheme();
-  const { settings, profile, mode, session, signOut, units, outbox, remote, organizations, organizationId, invitations, switchOrganization } =
+  const { settings, profile, mode, session, signOut, units, outbox, remote, organizations, organizationId, invitations, switchOrganization, identity } =
     useStore();
   const { role, canAudit } = usePermissions();
   const [confirmOut, setConfirmOut] = useState(false);
@@ -159,6 +160,12 @@ export default function Plus() {
           onPress={remote ? () => router.push('/equipe') : undefined}
         />
         {remote && canAudit ? <Row icon={History} label="Journal d’activité" onPress={() => router.push('/journal')} /> : null}
+        <Row
+          icon={Stamp}
+          label="Identité et quittances"
+          hint={identity.legalName ?? undefined}
+          onPress={() => router.push('/identite')}
+        />
         <Row icon={FileText} label="Rapports et exports" />
         <Row
           icon={Settings}

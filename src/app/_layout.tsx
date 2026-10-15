@@ -59,6 +59,7 @@ function RootStack() {
           <Stack.Screen name="parametres" options={{ title: 'Paramètres' }} />
           <Stack.Screen name="equipe" options={{ title: 'Équipe' }} />
           <Stack.Screen name="invitations" options={{ title: 'Invitations' }} />
+          <Stack.Screen name="identite" options={{ title: 'Identité et quittances' }} />
           <Stack.Screen name="journal" options={{ title: 'Journal d’activité' }} />
           <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
         </Stack.Protected>

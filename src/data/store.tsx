@@ -9,6 +9,9 @@ import { isApiConfigured } from '@/lib/config';
 import { formatAmount, periodOf } from '@/lib/format';
 
 import { countries, splitPhone } from './countries';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+
+import { storageKeyOf, toDataUri } from '@/lib/images';
 
 import { buildPayments, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
@@ -27,8 +30,10 @@ import {
 import { isRetryable, type OutboxDraft, type OutboxEntry, type OutboxFailure, type OutboxResult, retryDelay, sendOutboxEntry } from './outbox';
 import {
   type ApiOrganization,
+  type ApiIdentity,
   type ApiUser,
   calendarDate,
+  type IdentityFields,
   type MessagingSettings,
   type ReceivedInvitation,
   remote,
@@ -49,6 +54,28 @@ export type Settings = {
   onlinePayments?: boolean;
   /** Préavis par défaut et seuils des alertes (valeurs par défaut sans compte en ligne) */
   leases?: LeaseSettings;
+};
+
+/**
+ * Identité imprimée sur les quittances. Le logo et le cachet sont gardés en data URI sur le
+ * téléphone (quittances hors ligne) ; `logoKey` / `stampKey` disent de quelle image du serveur il s'agit.
+ */
+export type Identity = IdentityFields & {
+  logo?: string;
+  stamp?: string;
+  logoKey?: string | null;
+  stampKey?: string | null;
+};
+
+export const emptyIdentity: Identity = {
+  legalName: null,
+  address: null,
+  phone: null,
+  email: null,
+  registrationNumber: null,
+  taxId: null,
+  brandColor: 'teal',
+  receiptFooter: null,
 };
 
 /** Le bailleur : son nom figure sur les quittances. */
@@ -91,6 +118,8 @@ type State = {
   outboxFailures: OutboxFailure[];
   profile: Profile;
   settings: Settings;
+  /** Identité imprimée sur les quittances de l'espace */
+  identity: Identity;
   properties: Property[];
   units: Unit[];
   tenants: Tenant[];
@@ -129,6 +158,8 @@ type Action =
   | { type: 'addTenant'; tenant: Tenant; rent: number; payments: Payment[] }
   | { type: 'updateTenant'; tenantId: string; patch: Partial<Tenant> }
   | { type: 'setUnitRent'; unitId: string; rent: number }
+  | { type: 'setIdentity'; identity: Partial<Identity> }
+  | { type: 'setPropertyPhoto'; propertyId: string; photo: string | undefined }
   | { type: 'recordDeparture'; tenantId: string; exitDate: string; settlement: Settlement; addPayments: Payment[]; removePaymentIds: string[] };
 
 export type NewUnit = Pick<Unit, 'label' | 'rent'>;
@@ -176,6 +207,7 @@ function reducer(state: State, action: Action): State {
         payments: [],
         syncedAt: null,
         settings: { prorata: 'full' },
+        identity: emptyIdentity,
       };
     case 'noOrganization':
       return {
@@ -190,6 +222,7 @@ function reducer(state: State, action: Action): State {
         syncedAt: null,
         outbox: [],
         settings: { prorata: 'full' },
+        identity: emptyIdentity,
       };
     case 'enqueue':
       return { ...state, outbox: [...state.outbox, action.entry] };
@@ -222,8 +255,9 @@ function reducer(state: State, action: Action): State {
       };
     }
     case 'remoteLoaded': {
-      // Les photos ne sont pas encore envoyées au serveur : on garde celles du téléphone
-      const photos = new Map(state.properties.filter((p) => p.photo).map((p) => [p.id, p.photo]));
+      // Photo du serveur ; sinon celle du téléphone (ancienne photo pas encore envoyée)
+      const photos = new Map(state.properties.filter((p) => p.photo && !/^https?:/.test(p.photo)).map((p) => [p.id, p.photo]));
+      const identity = action.data.identity;
       return {
         ...state,
         onboarded: true,
@@ -238,7 +272,8 @@ function reducer(state: State, action: Action): State {
           onlinePayments: action.data.organization.onlinePaymentsEnabled ?? false,
           leases: action.data.organization.leases ?? state.settings.leases,
         },
-        properties: action.data.properties.map((p) => ({ ...p, photo: photos.get(p.id) })),
+        properties: action.data.properties.map((p) => ({ ...p, photo: p.photo ?? photos.get(p.id) })),
+        identity: identity ? mergeIdentity(state.identity, identity) : state.identity,
         units: action.data.units,
         tenants: action.data.tenants,
         payments: action.data.payments,
@@ -267,6 +302,13 @@ function reducer(state: State, action: Action): State {
       };
     case 'updateTenant':
       return { ...state, tenants: state.tenants.map((t) => (t.id === action.tenantId ? { ...t, ...action.patch } : t)) };
+    case 'setIdentity':
+      return { ...state, identity: { ...state.identity, ...action.identity } };
+    case 'setPropertyPhoto':
+      return {
+        ...state,
+        properties: state.properties.map((p) => (p.id === action.propertyId ? { ...p, photo: action.photo } : p)),
+      };
     case 'setUnitRent':
       return { ...state, units: state.units.map((u) => (u.id === action.unitId ? { ...u, rent: action.rent } : u)) };
     case 'recordDeparture': {
@@ -320,6 +362,12 @@ type Store = State & {
   /** Enregistre un préavis (Kaza ne le signifie pas au locataire) */
   giveNotice: (tenantId: string, notice: Notice) => Promise<void>;
   withdrawNotice: (tenantId: string) => Promise<void>;
+  /** Identité imprimée sur les quittances (propriétaire) */
+  setIdentity: (fields: Partial<IdentityFields>) => Promise<void>;
+  /** Logo ou cachet : data URI compressée, ou null pour l'enlever */
+  setIdentityImage: (target: 'logo' | 'stamp', uri: string | null) => Promise<void>;
+  /** Photo de couverture d'un bien : data URI compressée, ou null pour l'enlever */
+  setPropertyPhoto: (propertyId: string, uri: string | null) => Promise<void>;
   /** Annule un paiement (erreur de saisie, argent non reçu…) : il disparaît des montants encaissés. */
   voidPayment: (paymentId: string, reason: string) => Promise<void>;
   /** Ouvre un autre espace du compte (refusé tant que des enregistrements attendent d'être envoyés) */
@@ -370,6 +418,21 @@ const newId = (): string => Crypto.randomUUID();
 const toUnits = (propertyId: string, units: NewUnit[]): Unit[] =>
   units.map((u) => ({ id: newId(), propertyId, label: u.label.trim(), rent: u.rent }));
 
+/** Champs du serveur ; images gardées tant que leur clé n'a pas changé (elles sont relues ensuite). */
+function mergeIdentity(current: Identity, server: ApiIdentity): Identity {
+  const { logoUrl, stampUrl, ...fields } = server;
+  const logoKey = storageKeyOf(logoUrl);
+  const stampKey = storageKeyOf(stampUrl);
+  return {
+    ...fields,
+    logoKey,
+    stampKey,
+    // Même image qu'avant, ou image envoyée depuis ce téléphone (clé encore inconnue) : on la garde
+    logo: logoKey && (logoKey === current.logoKey || current.logoKey === null) ? current.logo : undefined,
+    stamp: stampKey && (stampKey === current.stampKey || current.stampKey === null) ? current.stamp : undefined,
+  };
+}
+
 const STORAGE_KEY = 'kaza/state/v1';
 /** Champs sauvegardés sur le téléphone */
 const PERSISTED = [
@@ -382,6 +445,7 @@ const PERSISTED = [
   'syncedAt',
   'profile',
   'settings',
+  'identity',
   'properties',
   'units',
   'tenants',
@@ -403,6 +467,7 @@ function emptyState(): State {
     syncedAt: null,
     profile: { firstName: '', lastName: '', phone: '' },
     settings: { prorata: 'full' },
+    identity: emptyIdentity,
     properties: [],
     units: [],
     tenants: [],
@@ -480,7 +545,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const data = await remote.snapshot(organizationId, new Date());
     // Des écritures attendent encore d'être envoyées : le serveur ne les connaît pas, on garde le téléphone
     if (stateRef.current.outbox.length > 0) return;
+    const merged = data.identity ? mergeIdentity(stateRef.current.identity, data.identity) : null;
     dispatch({ type: 'remoteLoaded', data, syncedAt: new Date().toISOString() });
+    if (data.identity && merged) void fetchIdentityImages(data.identity, merged);
+  };
+
+  /** Logo et cachet nouveaux sur le serveur : téléchargés pour les quittances hors ligne. */
+  const fetchIdentityImages = async (identity: ApiIdentity, merged: Identity) => {
+    for (const [url, field] of [
+      [identity.logoUrl, 'logo'],
+      [identity.stampUrl, 'stamp'],
+    ] as const) {
+      if (!url || merged[field]) continue;
+      const data = await toDataUri(url);
+      if (data) dispatch({ type: 'setIdentity', identity: { [field]: data } });
+    }
   };
 
   // ── File d'envoi ──────────────────────────────────────────────────────────────
@@ -598,6 +677,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearTimeout(retryTimer.current);
     };
   }, []);
+
+  // Photos prises avant l'envoi au serveur (fichier du téléphone) : envoyées une fois, si le rôle le permet
+  const migratedPhotos = useRef(new Set<string>());
+  useEffect(() => {
+    if (!state.hydrated || !state.remote || !isApiConfigured || !state.organizationId) return;
+    const role = state.organizations.find((o) => o.id === state.organizationId)?.role;
+    if (role !== 'owner' && role !== 'manager') return;
+    for (const p of state.properties) {
+      if (!p.photo || /^(https?|data):/.test(p.photo) || migratedPhotos.current.has(p.id)) continue;
+      migratedPhotos.current.add(p.id);
+      const orgId = state.organizationId;
+      manipulateAsync(p.photo, [{ resize: { width: 1600 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true })
+        .then((out) => {
+          const uri = `data:image/jpeg;base64,${out.base64}`;
+          dispatch({ type: 'setPropertyPhoto', propertyId: p.id, photo: uri });
+          dispatch({
+            type: 'enqueue',
+            entry: {
+              kind: 'putImage',
+              orgId,
+              target: 'property',
+              propertyId: p.id,
+              uri,
+              label: `Photo de « ${p.name} »`,
+              key: newIdempotencyKey(),
+              createdAt: new Date().toISOString(),
+              attempts: 0,
+            },
+          });
+          setTimeout(() => void flushRef.current(), 0);
+        })
+        .catch(() => {});
+    }
+  }, [state.hydrated, state.remote, state.organizationId, state.organizations, state.properties]);
 
   // Sauvegarde après chaque changement (regroupé sur 300 ms)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -835,6 +948,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             },
             apply,
           );
+          if (property.photo) {
+            await write(
+              { kind: 'putImage', orgId, target: 'property', propertyId: id, uri: property.photo, label: `Photo de « ${property.name} »` },
+              () => {},
+            ).catch(() => {});
+          }
           return id;
         }
         apply();
@@ -901,6 +1020,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
         return id;
+      },
+      setIdentity: async (fields) => {
+        const apply = () => dispatch({ type: 'setIdentity', identity: fields });
+        if (online && organizationRef.current) {
+          await write({ kind: 'updateIdentity', orgId: organizationRef.current, body: fields, label: 'Identité de l’espace' }, apply);
+          return;
+        }
+        apply();
+      },
+      setIdentityImage: async (target, uri) => {
+        const apply = () =>
+          dispatch({ type: 'setIdentity', identity: { [target]: uri ?? undefined, [`${target}Key`]: null } });
+        const label = target === 'logo' ? 'Logo' : 'Signature ou cachet';
+        if (online && organizationRef.current) {
+          const orgId = organizationRef.current;
+          await write(
+            uri
+              ? { kind: 'putImage', orgId, target, uri, label }
+              : { kind: 'deleteImage', orgId, target, label: `${label} retiré` },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      setPropertyPhoto: async (propertyId, uri) => {
+        const apply = () => dispatch({ type: 'setPropertyPhoto', propertyId, photo: uri ?? undefined });
+        const property = state.properties.find((p) => p.id === propertyId);
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            uri
+              ? { kind: 'putImage', orgId, target: 'property', propertyId, uri, label: `Photo de « ${property?.name ?? 'bien'} »` }
+              : { kind: 'deleteImage', orgId, target: 'property', propertyId, label: `Photo retirée (${property?.name ?? 'bien'})` },
+            apply,
+          );
+          return;
+        }
+        apply();
       },
       reviseRent: async ({ tenantId, amount, from, reason, notifyTenant, applyToUnit }) => {
         const tenant = state.tenants.find((t) => t.id === tenantId)!;

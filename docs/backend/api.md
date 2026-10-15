@@ -238,6 +238,20 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
   « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
 - Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
 
+## Identité de l'espace et images — **implémentées** (étape 9)
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| GET | `…/identity` | — | `Identity` | tous | Identité et quittances |
+| PATCH | `…/identity` | `{ legalName?, address?, phone?, email?, registrationNumber?, taxId?, brandColor?, receiptFooter? }` (null efface) | `Identity` | propriétaire | Identité › Enregistrer |
+| PUT / DELETE | `…/identity/logo`, `…/identity/stamp` | multipart, champ `file` (JPEG ou PNG, 2 Mo) | `Identity` | propriétaire | Logo, cachet |
+| PUT / DELETE | `…/properties/:id/photo` | multipart, champ `file` | `{ photoUrl }` | propriétaire, gérant | Fiche du bien › Changer la photo |
+
+`Identity = { legalName, address, phone, email, registrationNumber, taxId, brandColor, receiptFooter, logoUrl, stampUrl }`.
+Les images ne sont jamais publiques : `logoUrl`, `stampUrl` et `photoUrl` sont des liens signés valables 6 h, renouvelés
+par chaque snapshot (`identity`, `properties[].photoUrl`). Erreurs : `extensionInvalid` (415), `exceedMaxSizeUpload` (413).
+`brandColor` ∈ `brandColors` de `@zhking13/kaza-domain` 0.5.0.
+
 ## Équipe et journal d'activité — **implémentés** (étape 7)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |

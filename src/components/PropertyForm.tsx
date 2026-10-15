@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { Check, ImagePlus, MapPin } from 'lucide-react-native';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -9,6 +8,7 @@ import { Chip } from './Chip';
 import { FormError } from './FormError';
 import { errorMessage } from '@/lib/api';
 import { Text } from './Text';
+import { pickImage } from '@/lib/images';
 import { TextField } from './TextField';
 import { draftKey, type UnitDraft, UnitsEditor } from './UnitsEditor';
 import { propertyTypeOrder, propertyTypes } from '@/data/propertyTypes';
@@ -75,13 +75,9 @@ export function PropertyForm({
   };
 
   const pickPhoto = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.6,
-    });
-    if (!res.canceled) setPhoto(res.assets[0].uri);
+    // Réduite et compressée : elle part ensuite au serveur
+    const uri = await pickImage({ maxSide: 1600, format: 'jpeg', aspect: [16, 9] });
+    if (uri) setPhoto(uri);
   };
 
   const errors = {
