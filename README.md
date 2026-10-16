@@ -147,6 +147,13 @@ Fonctionnement en mode serveur :
 5. Revenir en arrière : `eas update:rollback`. Les versions ne vont qu'aux builds de même empreinte native
    (`runtimeVersion: fingerprint`) : un nouveau module natif ou une nouvelle permission demande un nouveau build store.
 
+## Taille de l'application
+
+- Build `development` (APK debug) : compilé pour arm64 seulement (`eas.json`, `reactNativeArchitectures`), soit
+  environ 70 à 90 Mo au lieu de plus de 250 Mo ; il ne tourne pas sur un émulateur x86 ni un vieux téléphone 32 bits.
+- Builds `preview` et `production` : code et ressources Android réduits (R8, `expo-build-properties`). En production,
+  le Play Store n'envoie que l'architecture du téléphone : environ 25 à 40 Mo téléchargés.
+
 ## Lancer l'application
 
 ```bash
