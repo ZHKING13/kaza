@@ -247,7 +247,8 @@ export default function LocataireDetail() {
 
         <LeaseTerms tenant={tenant} unit={unit} canManage={canManage} />
 
-        <OnlinePayment leaseId={tenant.id} remaining={remaining} canSend={canCollect} />
+        {/* Le lien règle le mois en cours (montant calculé par le serveur) */}
+        <OnlinePayment leaseId={tenant.id} remaining={current} canSend={canCollect} />
 
         <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0 && canCollect} />
 
