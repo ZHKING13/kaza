@@ -125,7 +125,7 @@ const PUSH_ROWS: { key: PushCategory; title: string; hint: string }[] = [
   { key: 'payments', title: 'Paiements reçus', hint: 'Un locataire a payé par mobile money.' },
   { key: 'late', title: 'Loyers en retard', hint: 'Un récapitulatif à 9 h, les jours où des loyers restent dus.' },
   { key: 'lease', title: 'Fins de contrat et préavis', hint: '30 jours avant, 7 jours avant et le jour même.' },
-  { key: 'subscription', title: 'Mon offre', hint: 'Paiement confirmé, essai ou offre bientôt terminés.' },
+  { key: 'subscription', title: 'Mon offre', hint: 'Paiement confirmé, offre de bienvenue ou offre bientôt terminées.' },
   { key: 'team', title: 'Équipe', hint: 'Une personne invitée a rejoint l’espace.' },
   { key: 'teamPayments', title: 'Encaissements de l’équipe', hint: 'Chaque loyer saisi par un gérant ou un collecteur.' },
 ];

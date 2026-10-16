@@ -91,6 +91,8 @@ export type SubscriptionInvoice = {
   plan: PlanId;
   months: number;
   amount: number;
+  /** Offre de bienvenue : réduction en % (0 sans) */
+  welcomePercent: number;
   currency: string;
   status: 'pending' | 'paid' | 'failed' | 'expired';
   number: string | null;
@@ -112,7 +114,16 @@ export type SubscriptionDetail = {
   limits: PlanLimits;
   usage: { units: number; members: number; messagesThisMonth: number };
   billingAvailable: boolean;
-  catalog: { id: PlanId; label: string; monthlyPrice: number; prices: { months: number; amount: number }[]; limits: PlanLimits }[];
+  /** Offre de bienvenue du propriétaire, tant qu'elle est ouverte */
+  welcome: { endsAt: string; daysLeft: number; discounts: { months: number; percent: number }[] } | null;
+  /** `amount` : prix à payer (offre de bienvenue déduite), `fullAmount` : prix normal */
+  catalog: {
+    id: PlanId;
+    label: string;
+    monthlyPrice: number;
+    prices: { months: number; amount: number; fullAmount: number; percent: number }[];
+    limits: PlanLimits;
+  }[];
   invoices: SubscriptionInvoice[];
 };
 

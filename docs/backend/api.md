@@ -276,7 +276,11 @@ Chaque notification d'un type activé est aussi gardée 90 jours dans le centre 
 | PUT | `/system/subscriptions/:organizationId` | `{ plan, paidUntil?, trialEndsAt? }` | `Subscription` | clé système | Back office |
 
 `Subscription = { plan, status: trial|active|grace|expired|free, effectivePlan, endsAt, daysLeft, trialEndsAt, paidUntil,
-limits, usage: { units, members, messagesThisMonth }, billingAvailable, catalog, invoices }`. L'espace (`/user/me`,
+limits, usage: { units, members, messagesThisMonth }, billingAvailable, welcome, catalog, invoices }`.
+Pas d'essai : un espace démarre en offre Gratuit (3 logements, 5 messages Kaza par mois). `welcome = { endsAt, daysLeft,
+discounts: [{ months: 3, percent: 25 }, { months: 12, percent: 20 }] } | null` : offre de bienvenue, 30 jours après la
+création du compte du propriétaire, sur son premier paiement, une fois par personne. `catalog[].prices[] = { months,
+amount (à payer), fullAmount, percent }` ; la facture porte `welcomePercent`. L'espace (`/user/me`,
 snapshot) porte `subscription: { plan, status, effectivePlan, endsAt, daysLeft }`. Refus pour cause d'offre : 403
 `unitsLimit`, `membersLimit`, `featureLocked`, `messagesQuota`, avec `data.suggestedPlan` / `suggestedPlanLabel`.
 

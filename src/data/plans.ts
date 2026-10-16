@@ -22,7 +22,7 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
     label: 'Gratuit',
     monthlyPrice: 0,
     pitch: 'Pour essayer avec quelques logements.',
-    limits: { units: 3, members: 1, messagesPerMonth: 0, onlinePayments: false, branding: false, activityLog: false, exports: false, landlordReports: false },
+    limits: { units: 3, members: 1, messagesPerMonth: 5, onlinePayments: false, branding: false, activityLog: false, exports: false, landlordReports: false },
   },
   starter: {
     label: 'Bailleur',
@@ -71,4 +71,10 @@ export const statusLabels: Record<SubscriptionStatus, string> = {
   grace: 'À renouveler',
   expired: 'Terminée',
   free: 'Gratuite',
+};
+
+/** Offre de bienvenue (copie de @zhking13/kaza-domain 0.9.0) : réduction sur le premier paiement, 30 jours après l'inscription. */
+export const welcomeOffer = {
+  days: 30,
+  percentByMonths: { 3: 25, 12: 20 } as Partial<Record<BillingMonths, number>>,
 };
