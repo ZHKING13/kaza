@@ -202,7 +202,8 @@ export default function Accueil() {
                 {past ? ` en ${formatPeriod(shown)}` : ''}
               </Text>
               <Text variant="small" color={status.late.fg}>
-                {formatAmount(totals.outstanding)} à recevoir
+                {formatAmount(totals.outstanding + totals.arrears)} à recevoir
+                {totals.arrears > 0 ? `, dont ${formatAmount(totals.arrears)} d’arriérés` : ''}
               </Text>
             </View>
             {canCollect && !past ? (

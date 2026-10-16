@@ -95,8 +95,10 @@ export type TenantSummary = {
   paid: number;
   due: number;
   dueDate: string;
-  /** Loyer du mois en cours (révisions comprises) */
+  /** Loyer du mois (révisions comprises) */
   rent: number;
+  /** Reste dû sur les mois antérieurs au mois affiché */
+  arrears: number;
 };
 
 export type ExpenseCategory = 'works' | 'maintenance' | 'utilities' | 'taxes' | 'insurance' | 'caretaker' | 'agency_fees' | 'other';

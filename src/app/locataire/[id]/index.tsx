@@ -180,7 +180,7 @@ export default function LocataireDetail() {
             <Text variant="small" tone="muted">
               {unit.label} · {property.name}
             </Text>
-            <StatusBadge status={summary.status} style={{ alignSelf: 'flex-start' }} />
+            <StatusBadge status={summary.status} arrears={summary.arrears} style={{ alignSelf: 'flex-start' }} />
           </View>
         </View>
         <LeaseEndBanner tenant={tenant} />

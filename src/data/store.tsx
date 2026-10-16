@@ -1670,10 +1670,25 @@ export function useTenantSummaries(forPeriod?: string): TenantSummary[] {
                       dayKey(today) > dayKey(dueDate)
                       ? 'late'
                       : 'upcoming';
-          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString(), rent: rentAt(schedule, period) };
+          const arrears = leaseMonths({
+            rent: schedule,
+            rule: settings.prorata,
+            entryDate: tenant.entryDate,
+            exitDate: tenant.exitDate,
+            payments: payments.filter((p) => p.tenantId === tenant.id),
+            currentPeriod: current,
+          })
+            .filter((m) => m.period < period)
+            .reduce((sum, m) => sum + m.remaining, 0);
+          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString(), rent: rentAt(schedule, period), arrears };
         }),
     [tenants, units, properties, payments, today, period, current, settings.prorata],
   );
+}
+
+/** Statut affiché dans les listes : un mois payé ou à venir avec des arriérés compte comme un retard. */
+export function listStatus(s: TenantSummary): TenantSummary['status'] {
+  return s.arrears > 0 && (s.status === 'paid' || s.status === 'upcoming') ? 'late' : s.status;
 }
 
 export type LeaseAlerts = {
@@ -1720,12 +1735,15 @@ export function useMonthTotals(period?: string) {
   return useMemo(() => {
     const expected = summaries.reduce((s, x) => s + x.due, 0);
     const collected = summaries.reduce((s, x) => s + Math.min(x.paid, x.due), 0);
-    const late = summaries.filter((x) => x.status === 'late' || x.status === 'partial');
+    const late = summaries.filter((x) => listStatus(x) === 'late' || x.status === 'partial');
+    const arrears = summaries.reduce((s, x) => s + x.arrears, 0);
     const occupied = new Set(summaries.map((x) => x.unit.id));
     return {
       expected,
       collected,
       outstanding: expected - collected,
+      /** Reste dû sur les mois précédents */
+      arrears,
       lateCount: late.length,
       paidCount: summaries.filter((x) => x.status === 'paid').length,
       tenantCount: summaries.length,
@@ -1761,7 +1779,7 @@ export function usePropertySummaries(period?: string): PropertySummary[] {
           tenants: pTenants,
           expected: pTenants.reduce((s, x) => s + x.due, 0),
           collected: pTenants.reduce((s, x) => s + Math.min(x.paid, x.due), 0),
-          lateCount: pTenants.filter((x) => x.status === 'late' || x.status === 'partial').length,
+          lateCount: pTenants.filter((x) => listStatus(x) === 'late' || x.status === 'partial').length,
           vacantCount: pUnits.filter((u) => !occupied.has(u.id)).length,
           occupancy: pUnits.length ? occupied.size / pUnits.length : 0,
         };

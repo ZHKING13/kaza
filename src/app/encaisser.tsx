@@ -16,7 +16,7 @@ import { Text } from '@/components/Text';
 import { methodOrder, methods } from '@/data/methods';
 import { allocatePayment, leaseMonths } from '@/data/allocation';
 import { addMonthsToPeriod, tenantRent } from '@/data/rent';
-import { useLeaseMonths, useStore, useTenantSummaries } from '@/data/store';
+import { listStatus, useLeaseMonths, useStore, useTenantSummaries } from '@/data/store';
 import type { Payment, PaymentMethod } from '@/data/types';
 import type { RentStatus } from '@/theme';
 import { formatAmount, formatDate, formatNumber, formatPeriod } from '@/lib/format';
@@ -45,7 +45,7 @@ export default function Encaisser() {
     () =>
       summaries
         .filter((s) => !params.propertyId || s.property.id === params.propertyId)
-        .sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.tenant.lastName.localeCompare(b.tenant.lastName)),
+        .sort((a, b) => ORDER[listStatus(a)] - ORDER[listStatus(b)] || a.tenant.lastName.localeCompare(b.tenant.lastName)),
     [summaries, params.propertyId],
   );
 
@@ -206,7 +206,7 @@ export default function Encaisser() {
                   {selected.unit.label} · {selected.property.name}
                 </Text>
               </View>
-              <StatusBadge status={selected.status} />
+              <StatusBadge status={selected.status} arrears={selected.arrears} />
             </Card>
           ) : (
             <Card padded={false}>
@@ -248,7 +248,7 @@ export default function Encaisser() {
                         {s.unit.label} · {owedBy.get(s.tenant.id) ? `dû ${formatNumber(owedBy.get(s.tenant.id)!)}` : 'à jour'}
                       </Text>
                     </View>
-                    <StatusBadge status={s.status} />
+                    <StatusBadge status={s.status} arrears={s.arrears} />
                   </Pressable>
                 );
               })}
@@ -336,6 +336,11 @@ export default function Encaisser() {
                 </Text>
               </View>
             ))}
+            {startPeriod && preview.parts.some((p) => p.period < startPeriod) ? (
+              <Text variant="small" tone="muted" style={{ paddingHorizontal: space.md, paddingTop: space.xxs }}>
+                Les mois plus anciens encore dus sont réglés en premier, puis {formatPeriod(startPeriod)} et les suivants.
+              </Text>
+            ) : null}
             <View style={{ height: space.xs }} />
           </Card>
         ) : null}

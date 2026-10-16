@@ -242,7 +242,7 @@ export default function BienDetail() {
                       </View>
                       <View style={{ alignItems: 'flex-end', gap: 4 }}>
                         <Amount value={u.rent} currency={false} />
-                        <StatusBadge status={t ? t.status : 'vacant'} />
+                        <StatusBadge status={t ? t.status : 'vacant'} arrears={t?.arrears} />
                       </View>
                     </>
                   );

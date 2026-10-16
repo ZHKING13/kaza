@@ -61,7 +61,7 @@ export function TenantRow({ summary, method, amount, first }: Props) {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Amount value={amount ?? summary.rent} currency={false} />
-          <StatusBadge status={status} />
+          <StatusBadge status={status} arrears={summary.arrears} />
         </View>
       </Pressable>
   );
