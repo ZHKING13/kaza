@@ -6,8 +6,8 @@ import { ScrollView, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { EmptyState } from '@/components/EmptyState';
-import { FormError } from '@/components/FormError';
 import { ReceiptHeader, useReceiptBrand } from '@/components/ReceiptHeader';
 import { KazaSendButton } from '@/components/KazaSendButton';
 import { PdfButton } from '@/components/PdfButton';
@@ -16,7 +16,6 @@ import { remote } from '@/data/remote';
 import { Text } from '@/components/Text';
 import { useReceipt } from '@/data/documents';
 import { usePermissions, useStore } from '@/data/store';
-import { errorMessage } from '@/lib/api';
 import { methods } from '@/data/methods';
 import { receiptNumber } from '@/lib/documents';
 import { formatAmount, formatDate, formatPeriod } from '@/lib/format';
@@ -40,53 +39,31 @@ const VOID_REASONS = ['Erreur de saisie', 'Argent non reçu', 'Paiement en doubl
 
 /** Annulation d'un paiement : le paiement n'est pas effacé, il sort des montants encaissés (motif gardé sur le serveur). */
 function VoidPayment({ paymentId }: { paymentId: string }) {
-  const { status } = useTheme();
   const { voidPayment } = useStore();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(VOID_REASONS[0]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>();
-
-  if (!open) {
-    return <Button label="Annuler ce paiement" icon={Ban} variant="ghost" onPress={() => setOpen(true)} />;
-  }
-
-  const confirm = async () => {
-    setSaving(true);
-    setError(undefined);
-    try {
-      await voidPayment(paymentId, reason);
-      router.back();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
-    <Card style={{ gap: space.sm, borderColor: status.late.fg }}>
-      <Text variant="bodyStrong">Annuler ce paiement ?</Text>
-      <Text variant="small" tone="muted">
-        Il ne comptera plus dans les loyers encaissés. L’annulation et son motif restent dans l’historique de votre compte.
-      </Text>
-      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-        {VOID_REASONS.map((r) => (
-          <Chip key={r} label={r} selected={reason === r} onPress={() => setReason(r)} />
-        ))}
-      </View>
-      <FormError message={error} />
-      <View style={{ flexDirection: 'row', gap: space.xs }}>
-        <Button label="Garder" variant="secondary" style={{ flex: 1 }} onPress={() => setOpen(false)} />
-        <Button
-          label={saving ? 'Annulation…' : 'Annuler le paiement'}
-          variant="danger"
-          style={{ flex: 1 }}
-          disabled={saving}
-          onPress={confirm}
-        />
-      </View>
-    </Card>
+    <>
+      <Button label="Annuler ce paiement" icon={Ban} variant="ghost" onPress={() => setOpen(true)} />
+      <ConfirmSheet
+        visible={open}
+        title="Annuler ce paiement ?"
+        message="Il ne comptera plus dans les loyers encaissés. L’annulation et son motif restent dans l’historique de votre compte."
+        confirmLabel="Annuler le paiement"
+        cancelLabel="Garder le paiement"
+        onClose={() => setOpen(false)}
+        onConfirm={async () => {
+          await voidPayment(paymentId, reason);
+          router.back();
+        }}>
+        <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+          {VOID_REASONS.map((r) => (
+            <Chip key={r} label={r} selected={reason === r} onPress={() => setReason(r)} />
+          ))}
+        </View>
+      </ConfirmSheet>
+    </>
   );
 }
 

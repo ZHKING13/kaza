@@ -7,10 +7,12 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
+import { MonthSwitcher } from '@/components/MonthSwitcher';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { TenantRow } from '@/components/TenantRow';
 import { useFormerTenants, usePermissions, useTenantSummaries } from '@/data/store';
+import { useViewPeriod } from '@/data/viewPeriod';
 import { Avatar } from '@/components/Avatar';
 import { formatDate } from '@/lib/format';
 import { fonts, radius, type RentStatus, space, useTheme } from '@/theme';
@@ -22,7 +24,8 @@ const order: Record<RentStatus, number> = { late: 0, partial: 1, upcoming: 2, pa
 export default function Locataires() {
   const { c } = useTheme();
   const { canManage } = usePermissions();
-  const summaries = useTenantSummaries();
+  const { period } = useViewPeriod();
+  const summaries = useTenantSummaries(period);
   const former = useFormerTenants();
   const [query, setQuery] = useState('');
   // Notification « loyers en retard » : la liste s'ouvre sur les retards
@@ -81,6 +84,7 @@ export default function Locataires() {
           </Pressable>
           )
         }>
+        {filter !== 'former' ? <MonthSwitcher /> : null}
         <View
           style={{
             flexDirection: 'row',

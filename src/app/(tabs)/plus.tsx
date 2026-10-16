@@ -21,6 +21,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { DemoBanner } from '@/components/DemoBanner';
 import { Card } from '@/components/Card';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { KazaMark } from '@/components/KazaMark';
 import { Screen } from '@/components/Screen';
 import { SyncBanner } from '@/components/SyncBanner';
@@ -82,7 +83,7 @@ function offerHint(s: OrganizationSubscription): string {
 }
 
 export default function Plus() {
-  const { c, status } = useTheme();
+  const { c } = useTheme();
   const { settings, profile, mode, session, signOut, outbox, remote, organizations, organizationId, invitations, switchOrganization, identity } =
     useStore();
   const { role, canAudit } = usePermissions();
@@ -196,31 +197,29 @@ export default function Plus() {
 
       <SyncBanner />
 
-      {confirmOut ? (
-        <Card style={{ gap: space.sm, borderColor: status.late.fg }}>
-          <Text variant="bodyStrong">{mode === 'demo' ? 'Quitter la démo ?' : 'Se déconnecter ?'}</Text>
-          <Text variant="small" tone="muted">
-            {mode === 'demo'
-              ? 'Les données d’exemple seront effacées et vous reviendrez à l’écran d’accueil.'
-              : outbox.length
-                ? `Attention : ${outbox.length} enregistrement${outbox.length > 1 ? 's' : ''} pas encore envoyé${outbox.length > 1 ? 's' : ''} au serveur ${outbox.length > 1 ? 'seront perdus' : 'sera perdu'}. Reconnectez-vous au réseau avant de vous déconnecter.`
-                : remote
-                  ? 'Vos données restent sur votre compte : vous les retrouverez en vous reconnectant.'
-                  : 'Vos biens, locataires et paiements enregistrés sur ce téléphone seront effacés.'}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: space.xs }}>
-            <Button label="Annuler" variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmOut(false)} />
-            <Button label={mode === 'demo' ? 'Quitter' : 'Déconnecter'} variant="danger" style={{ flex: 1 }} onPress={signOut} />
-          </View>
-        </Card>
-      ) : (
-        <Button
-          label={mode === 'demo' ? 'Quitter la démo' : 'Se déconnecter'}
-          icon={LogOut}
-          variant="danger"
-          onPress={() => setConfirmOut(true)}
-        />
-      )}
+      <Button
+        label={mode === 'demo' ? 'Quitter la démo' : 'Se déconnecter'}
+        icon={LogOut}
+        variant="danger"
+        onPress={() => setConfirmOut(true)}
+      />
+      <ConfirmSheet
+        visible={confirmOut}
+        title={mode === 'demo' ? 'Quitter la démo ?' : 'Se déconnecter ?'}
+        message={
+          mode === 'demo'
+            ? 'Les données d’exemple seront effacées et vous reviendrez à l’écran d’accueil.'
+            : outbox.length
+              ? `Attention : ${outbox.length} enregistrement${outbox.length > 1 ? 's' : ''} pas encore envoyé${outbox.length > 1 ? 's' : ''} au serveur ${outbox.length > 1 ? 'seront perdus' : 'sera perdu'}. Reconnectez-vous au réseau avant de vous déconnecter.`
+              : remote
+                ? 'Vos données restent sur votre compte : vous les retrouverez en vous reconnectant.'
+                : 'Vos biens, locataires et paiements enregistrés sur ce téléphone seront effacés.'
+        }
+        confirmLabel={mode === 'demo' ? 'Quitter la démo' : 'Se déconnecter'}
+        icon={LogOut}
+        onClose={() => setConfirmOut(false)}
+        onConfirm={signOut}
+      />
 
       <View style={{ alignItems: 'center', gap: space.xs, paddingTop: space.lg }}>
         <KazaMark size={28} />

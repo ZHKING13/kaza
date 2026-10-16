@@ -1,5 +1,6 @@
 import { Bell, CircleAlert, DoorOpen, Receipt, Send } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Amount } from '@/components/Amount';
@@ -8,6 +9,7 @@ import { Card } from '@/components/Card';
 import { Fab } from '@/components/Fab';
 import { KazaMark } from '@/components/KazaMark';
 import { LeaseAlerts } from '@/components/LeaseAlerts';
+import { MonthSwitcher } from '@/components/MonthSwitcher';
 import { OfferBanner } from '@/components/OfferBanner';
 import { PushPrompt } from '@/components/PushPrompt';
 import { Screen } from '@/components/Screen';
@@ -19,8 +21,10 @@ import { createAccountFromDemo } from '@/lib/demo';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
 import { useMonthTotals, usePermissions, useReport, useStore, useTenantSummaries } from '@/data/store';
+import { useViewPeriod } from '@/data/viewPeriod';
 import { formatAmount, formatNumber, formatPeriod } from '@/lib/format';
-import { radius, space, useTheme } from '@/theme';
+import { syncUnread, useUnreadNotifications } from '@/lib/notifications';
+import { fonts, radius, space, useTheme } from '@/theme';
 
 function greeting(d: Date) {
   return d.getHours() < 18 ? 'Bonjour' : 'Bonsoir';
@@ -28,12 +32,21 @@ function greeting(d: Date) {
 
 export default function Accueil() {
   const { c, status } = useTheme();
-  const { payments, today, period, profile, mode, signOut, invitations, organizations, organizationId } = useStore();
+  const { payments, today, period, profile, mode, remote, signOut, invitations, organizations, organizationId } = useStore();
+  const unread = useUnreadNotifications();
+  useFocusEffect(
+    useCallback(() => {
+      syncUnread(mode, remote);
+    }, [mode, remote]),
+  );
   const { canCollect } = usePermissions();
   const current = organizations.length > 1 ? organizations.find((o) => o.id === organizationId) : undefined;
+  const { period: shown } = useViewPeriod();
   const summaries = useTenantSummaries();
-  const totals = useMonthTotals();
-  const monthReport = useReport(period, period);
+  const monthSummaries = useTenantSummaries(shown);
+  const totals = useMonthTotals(shown);
+  const monthReport = useReport(shown, shown);
+  const past = shown < period;
   const pct = totals.expected ? Math.round((totals.collected / totals.expected) * 100) : 0;
   const recent = payments.slice(0, 4);
 
@@ -47,32 +60,39 @@ export default function Accueil() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={mode === 'demo' ? 'Notifications, 3 nouvelles' : 'Notifications'}
-              style={{
+              accessibilityLabel={unread ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
+              onPress={() => router.push('/notifications')}
+              style={({ pressed }) => ({
                 width: 48,
                 height: 48,
                 borderRadius: radius.full,
                 borderWidth: 1,
                 borderColor: c.border,
-                backgroundColor: c.surface,
+                backgroundColor: pressed ? c.surfaceAlt : c.surface,
                 alignItems: 'center',
                 justifyContent: 'center',
-              }}>
+              })}>
               <Bell size={22} color={c.text} />
-              {mode === 'demo' ? (
+              {unread ? (
                 <View
                   style={{
                     position: 'absolute',
-                    top: 11,
-                    right: 12,
-                    width: 9,
-                    height: 9,
-                    borderRadius: 5,
-                    backgroundColor: status.late.fg,
+                    top: 4,
+                    right: 2,
+                    minWidth: 20,
+                    height: 20,
+                    paddingHorizontal: 5,
+                    borderRadius: 10,
+                    backgroundColor: c.accent,
                     borderWidth: 2,
-                    borderColor: c.surface,
-                  }}
-                />
+                    borderColor: c.bg,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Text variant="caption" color={c.onAccent} style={{ fontSize: 11, lineHeight: 13, fontFamily: fonts.semibold }}>
+                    {unread > 99 ? '99+' : unread}
+                  </Text>
+                </View>
               ) : null}
             </Pressable>
           </View>
@@ -86,12 +106,13 @@ export default function Accueil() {
         <OfferBanner />
         <PushPrompt />
         {/* Résumé du mois : la réponse à « où en sont mes loyers ? » */}
-        {summaries.length ? (
+        {summaries.length || monthSummaries.length ? <MonthSwitcher /> : null}
+        {monthSummaries.length ? (
           <>
             <View style={{ backgroundColor: c.primary, borderRadius: radius.lg, padding: space.md, gap: space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text variant="small" color={c.onPrimary} style={{ opacity: 0.9 }}>
-                  Encaissé en {formatPeriod(period).split(' ')[0]}
+                  Encaissé en {formatPeriod(shown).split(' ')[0]}
                 </Text>
                 <KazaMark size={22} color={c.onPrimary} />
               </View>
@@ -178,12 +199,13 @@ export default function Accueil() {
             <View style={{ flex: 1 }}>
               <Text variant="bodyStrong" color={status.late.fg}>
                 {totals.lateCount} locataire{totals.lateCount > 1 ? 's' : ''} en retard
+                {past ? ` en ${formatPeriod(shown)}` : ''}
               </Text>
               <Text variant="small" color={status.late.fg}>
                 {formatAmount(totals.outstanding)} à recevoir
               </Text>
             </View>
-            {canCollect ? (
+            {canCollect && !past ? (
               <Button label="Relancer" icon={Send} variant="danger" compact onPress={() => router.push('/locataires')} />
             ) : null}
           </View>

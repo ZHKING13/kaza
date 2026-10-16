@@ -4,6 +4,7 @@ import type { ProrataRule } from './prorata';
 import type { LeaseSettings } from './rent';
 import {
   type ApiOrganization,
+  type AllocationBody,
   type DepartureBody,
   type ExpenseBody,
   type ExpenseUpdateBody,
@@ -42,6 +43,8 @@ export type OutboxOp =
   /** `localPaymentIds` : avance calculée sur le téléphone, remplacée par celle du serveur après l'envoi */
   | { kind: 'createLease'; orgId: string; body: LeaseBody; localPaymentIds: string[] }
   | { kind: 'createPayment'; orgId: string; body: PaymentBody }
+  /** Encaissement sur plusieurs mois ; `localPaymentIds` : répartition calculée sur le téléphone, remplacée par celle du serveur */
+  | { kind: 'allocatePayment'; orgId: string; body: AllocationBody; localPaymentIds: string[] }
   | { kind: 'voidPayment'; orgId: string; paymentId: string; reason: string }
   /** `localPaymentIds` : retenues sur caution calculées sur le téléphone, remplacées par celles du serveur */
   | { kind: 'recordDeparture'; orgId: string; leaseId: string; body: DepartureBody; localPaymentIds: string[] }
@@ -110,6 +113,10 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
     case 'createPayment':
       await remote.createPayment(entry.orgId, entry.body, entry.key);
       return { kind: 'done' };
+    case 'allocatePayment': {
+      const payments = await remote.allocatePayment(entry.orgId, entry.body, entry.key);
+      return { kind: 'lease', leaseId: entry.body.leaseId, payments, localPaymentIds: entry.localPaymentIds };
+    }
     case 'voidPayment':
       await remote.voidPayment(entry.orgId, entry.paymentId, entry.reason);
       return { kind: 'done' };

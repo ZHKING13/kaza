@@ -112,6 +112,13 @@ export function buildPayments(today: Date): Payment[] {
 
   // Mois précédents : presque tout le monde a payé
   const methodsCycle: PaymentMethod[] = ['wave', 'orange', 'cash', 'mtn', 'wave', 'moov'];
+  // Baux plus anciens : tout est réglé avant les deux derniers mois (pas d'arriérés fictifs)
+  demoTenants(today).forEach((tn, i) => {
+    if (!tn.entryDate) return;
+    const entry = new Date(tn.entryDate);
+    const from = (entry.getFullYear() - today.getFullYear()) * 12 + entry.getMonth() - today.getMonth();
+    for (let m = from; m <= -3; m++) add(tn.id, m, 3 + (i % 6), methodsCycle[(i + m + 60) % methodsCycle.length]);
+  });
   tenants.forEach((tn, i) => {
     add(tn.id, -2, 3 + (i % 6), methodsCycle[i % methodsCycle.length]);
     if (tn.id !== 't3') add(tn.id, -1, 2 + (i % 7), methodsCycle[(i + 1) % methodsCycle.length]);

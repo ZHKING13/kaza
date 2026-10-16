@@ -487,6 +487,16 @@ export type ExpenseUpdateBody = Partial<{
 
 export type LandlordBody = { landlordName: string | null; landlordPhone: string | null; commissionBps: number | null };
 
+/** Encaissement réparti sur plusieurs mois (identifiants des paiements choisis par le téléphone, dans l'ordre des mois) */
+export type AllocationBody = {
+  ids: string[];
+  leaseId: string;
+  amount: number;
+  method: PaymentMethod;
+  startPeriod?: string;
+  receivedAt: string;
+};
+
 export type PaymentBody = {
   id: string;
   leaseId: string;
@@ -617,6 +627,11 @@ export const remote = {
     api
       .post<{ lease: { id: string }; payments: ApiPayment[] }>(`/user/organizations/${orgId}/leases`, body, { idempotencyKey })
       .then((res) => ({ leaseId: res.lease.id, payments: res.payments.map(toPayment) })),
+
+  allocatePayment: (orgId: string, body: AllocationBody, idempotencyKey: string) =>
+    api
+      .post<{ payments: ApiPayment[] }>(`/user/organizations/${orgId}/payments/allocations`, body, { idempotencyKey })
+      .then((res) => res.payments.map(toPayment)),
 
   createPayment: (orgId: string, body: PaymentBody, idempotencyKey: string) =>
     api.post<ApiPayment>(`/user/organizations/${orgId}/payments`, body, { idempotencyKey }).then(toPayment),

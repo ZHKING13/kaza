@@ -1,14 +1,16 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Check } from 'lucide-react-native';
+import { Check, House } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { EmptyState } from '@/components/EmptyState';
 import { FormError } from '@/components/FormError';
 import { errorMessage } from '@/lib/api';
 import { Text } from '@/components/Text';
 import { draftKey, type UnitDraft, UnitsEditor } from '@/components/UnitsEditor';
+import { propertyTypes } from '@/data/propertyTypes';
 import { useStore } from '@/data/store';
 import { nextUnitLabel } from '@/lib/units';
 import { space, useTheme } from '@/theme';
@@ -30,6 +32,17 @@ export default function AjouterUnites() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
   const invalid = units.some((u) => !u.label.trim() || u.rent <= 0);
+
+  // Villa ou magasin : loués en entier, un seul logement
+  if (property && propertyTypes[property.type].singleUnit) {
+    return (
+      <EmptyState
+        icon={House}
+        title="Un seul logement"
+        body={`${propertyTypes[property.type].label} se loue en entier. Pour plusieurs logements, créez un bien de type cour commune ou immeuble.`}
+      />
+    );
+  }
 
   const save = async () => {
     setSubmitted(true);

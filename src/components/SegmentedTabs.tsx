@@ -1,9 +1,13 @@
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView } from 'react-native';
 
 import { fonts, space, useTheme } from '@/theme';
 
 import { Text } from './Text';
 
+/**
+ * Onglets d'un écran. Chaque libellé tient sur une ligne : les onglets se partagent la largeur quand ils tiennent,
+ * sinon la rangée défile horizontalement (petits écrans, grands textes d'accessibilité).
+ */
 export function SegmentedTabs<K extends string>({
   tabs,
   value,
@@ -14,8 +18,14 @@ export function SegmentedTabs<K extends string>({
   onChange: (key: K) => void;
 }) {
   const { c } = useTheme();
+  const dense = tabs.length > 3;
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border }}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      accessibilityRole="tablist"
+      style={{ flexGrow: 0, borderBottomWidth: 1, borderBottomColor: c.border }}
+      contentContainerStyle={{ flexGrow: 1 }}>
       {tabs.map((t) => {
         const on = t.key === value;
         return (
@@ -25,21 +35,24 @@ export function SegmentedTabs<K extends string>({
             accessibilityState={{ selected: on }}
             onPress={() => onChange(t.key)}
             style={{
-              flex: 1,
+              flexGrow: 1,
               minHeight: 48,
               alignItems: 'center',
               justifyContent: 'center',
               borderBottomWidth: 2,
               borderBottomColor: on ? c.primary : 'transparent',
-              marginBottom: -1,
-              paddingHorizontal: space.xs,
+              paddingHorizontal: dense ? space.xs : space.md,
             }}>
-            <Text variant="body" color={on ? c.primary : c.textMuted} style={{ fontFamily: on ? fonts.semibold : fonts.medium }}>
+            <Text
+              variant={dense ? 'small' : 'body'}
+              numberOfLines={1}
+              color={on ? c.primary : c.textMuted}
+              style={{ fontFamily: on ? fonts.semibold : fonts.medium }}>
               {t.label}
             </Text>
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }

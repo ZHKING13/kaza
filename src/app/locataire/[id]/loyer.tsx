@@ -8,6 +8,7 @@ import { Amount } from '@/components/Amount';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
@@ -56,6 +57,7 @@ export default function RevisionLoyer() {
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   if (!tenant || !unit || tenant.exitDate || !canManage) {
     return <EmptyState icon={Check} title="Révision impossible" body="Ce locataire est parti, ou votre rôle ne le permet pas." />;
@@ -94,14 +96,7 @@ export default function RevisionLoyer() {
     }
   };
 
-  const cancel = async (revisionId: string) => {
-    setError(undefined);
-    try {
-      await cancelRentRevision(tenant.id, revisionId);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
+  const toCancel = cancelling ? history.find((h) => h.id === cancelling) : undefined;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -138,7 +133,7 @@ export default function RevisionLoyer() {
               </View>
               <Amount value={h.amount} currency={false} />
               {h.id && h.from >= period ? (
-                <Button label="Annuler" variant="ghost" compact onPress={() => cancel(h.id!)} />
+                <Button label="Annuler" variant="ghost" compact onPress={() => setCancelling(h.id)} />
               ) : null}
             </View>
           ))}
@@ -216,6 +211,14 @@ export default function RevisionLoyer() {
           disabled={saving}
         />
       </View>
+      <ConfirmSheet
+        visible={!!toCancel}
+        title="Retirer cette révision ?"
+        message={toCancel ? `Le loyer de ${formatAmount(toCancel.amount)} prévu à partir de ${formatPeriod(toCancel.from)} est retiré ; le loyer précédent continue de s’appliquer.` : undefined}
+        confirmLabel="Retirer la révision"
+        onClose={() => setCancelling(null)}
+        onConfirm={() => cancelRentRevision(tenant.id, cancelling!)}
+      />
     </KeyboardAvoidingView>
   );
 }

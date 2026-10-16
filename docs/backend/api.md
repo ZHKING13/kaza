@@ -75,7 +75,7 @@ rôle insuffisant : 403 `roleForbidden`. Lecture : tous les rôles ; écriture :
 | POST | `…/properties` | `{ name, type, district, city, description?, units: [{ label, rent }] }` | `PropertyDetail` | Nouveau bien, onboarding |
 | GET | `…/properties/:id` | `?period=2026-10` | `PropertyDetail` | Fiche bien |
 | PATCH | `…/properties/:id` | champs du bien | `PropertyDetail` | — |
-| POST | `…/properties/:id/units` | `{ units: [{ label, rent }] }` | `[unit]` (409 `unitLabelTaken`) | Ajouter des unités |
+| POST | `…/properties/:id/units` | `{ units: [{ label, rent }] }` | `[unit]` (409 `unitLabelTaken` ; villa ou magasin : une seule unité, 422 `singleUnit`) | Ajouter des unités |
 | POST | `…/uploads/property-photo` | `{ contentType }` | `{ uploadUrl, photoKey }` | **à faire** (stockage objet) |
 
 `PropertySummary = { id, name, type, district, city, description, photoKey, period, unitCount, occupiedCount, vacantCount, occupancy, expected, collected, lateCount }`
@@ -175,7 +175,8 @@ Erreurs : `alreadyEnded` (409), `exitBeforeEntry` (422), `notFound` (404).
 | Méthode | Route | Corps / paramètres | Réponse | Écran |
 |---|---|---|---|---|
 | GET | `…/payments` | `?period=2026-10&leaseId=&includeVoided=false&cursor=&limit=50` | `{ items: [Payment], nextCursor }` | Paiements, historique (du plus récent au plus ancien ; l'application utilise le snapshot) |
-| POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt? }` + `Idempotency-Key` | `Payment` — **implémenté** (owner, manager, collector ; `periodBeforeEntry`, `periodAfterExit`) | Encaisser |
+| POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt? }` + `Idempotency-Key` | `Payment` — **implémenté** (owner, manager, collector ; `periodBeforeEntry`, `periodAfterExit` ; au-delà du reste dû du mois : `amountTooHigh` 422 `{ maxAmount, lastPeriod }`) | — |
+| POST | `…/payments/allocations` | `{ ids?, leaseId, amount, method, startPeriod?, receivedAt? }` + `Idempotency-Key` | `{ payments: [Payment] }` — impayés plus anciens d'abord, puis `startPeriod` et les mois suivants, 12 mois d'avance au plus, un paiement par mois (`amountTooHigh` 422 au-delà) | Encaisser |
 | POST | `…/payments/:id/void` | `{ reason }` | `Payment` (owner, manager ; déjà annulé : renvoyé tel quel ; bail terminé : `leaseEnded` 409) | Quittance → « Annuler ce paiement » |
 | GET | `…/payments/:id/receipt` | — | `ReceiptData` (quittance ou reçu partiel) | Quittance (à venir) |
 
@@ -259,9 +260,12 @@ Snapshot : `expenses`, `expenseSchedules`, mandant sur `properties`. Rapports ca
 | POST | `/user/me/push-devices` | `{ token: "ExponentPushToken[…]", platform: ios\|android, appVersion? }` | — | utilisateur | démarrage, « Activer les notifications » |
 | POST | `/user/me/push-devices/remove` | `{ token }` | — | utilisateur | déconnexion |
 | GET / PATCH | `/user/me/notification-settings` | `{ payments?, late?, lease?, subscription?, team?, teamPayments? }` | `{ …types, devices }` | utilisateur | Paramètres › Mes notifications |
+| GET | `/user/me/notifications` | `?before=<createdAt>&limit=30` | `{ items: [{ id, organizationId, category, title, body, data, readAt, createdAt }], unread, hasMore }` | utilisateur | Accueil › cloche |
+| POST | `/user/me/notifications/read` | `{ ids? }` (toutes sans `ids`) | `{ unread }` | utilisateur | Notifications › « Tout marquer comme lu », ou toucher une notification |
 
 Notification : `title`, `body`, `data = { screen: tenant|late|subscription|team, organizationId, leaseId?, paymentId? }`.
 Envoi par le service push d'Expo ; un téléphone désinstallé est retiré seul. Jamais aux locataires.
+Chaque notification d'un type activé est aussi gardée 90 jours dans le centre de notifications (même sans téléphone).
 
 ## Abonnements — **implémentés** (étape 10)
 

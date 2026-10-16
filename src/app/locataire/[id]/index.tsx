@@ -17,7 +17,7 @@ import { useSettlementDoc } from '@/data/documents';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Text } from '@/components/Text';
 import { byMethod, methods } from '@/data/methods';
-import { useFormerTenants, usePermissions, useStore, useTenantSummaries } from '@/data/store';
+import { useFormerTenants, useLeaseMonths, usePermissions, useStore, useTenantSummaries } from '@/data/store';
 import type { Payment } from '@/data/types';
 import { formatAmount, formatDate, formatPeriod, formatPhone } from '@/lib/format';
 import { callPhone, openWhatsApp } from '@/lib/whatsapp';
@@ -95,6 +95,8 @@ export default function LocataireDetail() {
   const { payments, period, organizationId } = useStore();
   const { canManage, canCollect } = usePermissions();
   const summary = useTenantSummaries().find((s) => s.tenant.id === id);
+  // Mois précédents non soldés (le mois en cours est compté à part)
+  const leaseMonths = useLeaseMonths(id);
   const former = useFormerTenants().find((f) => f.tenant.id === id);
   const settlementDoc = useSettlementDoc(id);
 
@@ -155,10 +157,14 @@ export default function LocataireDetail() {
   }
 
   const { tenant, unit, property } = summary;
-  const remaining = Math.max(summary.due - summary.paid, 0);
+  const current = Math.max(summary.due - summary.paid, 0);
+  const late = leaseMonths.filter((m) => m.period < period && m.remaining > 0);
+  const arrears = late.reduce((sum, m) => sum + m.remaining, 0);
+  const remaining = current + arrears;
   const reminder =
     `Bonjour ${tenant.firstName}, le loyer de ${formatPeriod(period)} (${formatAmount(summary.due)}) ` +
-    (summary.paid > 0 ? `est payé en partie : il reste ${formatAmount(remaining)}. ` : `était attendu le ${formatDate(summary.dueDate)}. `) +
+    (summary.paid > 0 ? `est payé en partie : il reste ${formatAmount(current)}. ` : `était attendu le ${formatDate(summary.dueDate)}. `) +
+    (arrears > 0 ? `Il reste aussi ${formatAmount(arrears)} sur ${late.map((m) => formatPeriod(m.period)).join(', ')}. ` : '') +
     `Merci de régulariser dès que possible. Kaza`;
 
   return (
@@ -182,12 +188,12 @@ export default function LocataireDetail() {
         <View style={{ flexDirection: 'row', gap: space.xs }}>
           <Button label="Appeler" icon={Phone} variant="secondary" style={{ flex: 1 }} onPress={() => callPhone(tenant.phone)} />
           <Button
-            label={summary.status === 'late' || summary.status === 'partial' ? 'Relancer' : 'WhatsApp'}
+            label={remaining > 0 && summary.status !== 'upcoming' ? 'Relancer' : 'WhatsApp'}
             icon={MessageCircle}
             variant="secondary"
             style={{ flex: 1 }}
             onPress={() =>
-              openWhatsApp(tenant.phone, summary.status === 'late' || summary.status === 'partial' ? reminder : `Bonjour ${tenant.firstName}, `)
+              openWhatsApp(tenant.phone, remaining > 0 && summary.status !== 'upcoming' ? reminder : `Bonjour ${tenant.firstName}, `)
             }
           />
         </View>
@@ -206,6 +212,11 @@ export default function LocataireDetail() {
           <Fact label={`Payé en ${formatPeriod(period).split(' ')[0]}`}>
             <Amount value={summary.paid} />
           </Fact>
+          {arrears > 0 ? (
+            <Fact label={`Arriérés · ${late.length} mois`}>
+              <Amount value={arrears} color={status.late.fg} />
+            </Fact>
+          ) : null}
           {remaining > 0 ? (
             <Fact label="Reste dû">
               <Amount value={remaining} color={status.late.fg} />

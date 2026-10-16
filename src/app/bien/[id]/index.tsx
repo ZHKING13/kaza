@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MethodDot } from '@/components/MethodDot';
 import { PropertyCover } from '@/components/PropertyCover';
 import { PropertyExpenses } from '@/components/PropertyExpenses';
+import { MonthSwitcher } from '@/components/MonthSwitcher';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TenantRow } from '@/components/TenantRow';
@@ -19,7 +20,8 @@ import { methods } from '@/data/methods';
 import { propertyTypes } from '@/data/propertyTypes';
 import { formatRate } from '@/data/expenses';
 import { usePermissions, usePropertySummaries, useStore } from '@/data/store';
-import { formatAmount, formatDate, formatNumber } from '@/lib/format';
+import { useViewPeriod } from '@/data/viewPeriod';
+import { formatAmount, formatDate, formatNumber, formatPeriod } from '@/lib/format';
 import { pickImage } from '@/lib/images';
 import { elevation, fonts, radius, space, useTheme } from '@/theme';
 
@@ -56,9 +58,10 @@ export default function BienDetail() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { payments, setPropertyPhoto, organizations, organizationId, remote: isRemote } = useStore();
+  const { payments, tenants, setPropertyPhoto, organizations, organizationId, remote: isRemote } = useStore();
   const { canManage, canCollect } = usePermissions();
-  const s = usePropertySummaries().find((x) => x.property.id === id);
+  const { period: shown } = useViewPeriod();
+  const s = usePropertySummaries(shown).find((x) => x.property.id === id);
   const [tab, setTab] = useState<Tab>('unites');
   const [photoBusy, setPhotoBusy] = useState(false);
 
@@ -82,7 +85,9 @@ export default function BienDetail() {
   const { property } = s;
   const hasPhoto = !!property.photo;
   const onCover = hasPhoto ? '#FFFFFF' : c.text;
-  const tenantIds = new Set(s.tenants.map((t) => t.tenant.id));
+  // Tous les paiements du bien, locataires partis compris
+  const unitIds = new Set(s.units.map((u) => u.id));
+  const tenantIds = new Set(tenants.filter((t) => unitIds.has(t.unitId)).map((t) => t.id));
   const history = payments
     .filter((p) => tenantIds.has(p.tenantId))
     .sort((a, b) => b.date.localeCompare(a.date) || b.period.localeCompare(a.period));
@@ -173,8 +178,9 @@ export default function BienDetail() {
             </Tile>
           </View>
           <Text variant="caption" tone="muted" style={{ textAlign: 'center', marginTop: -space.xs }}>
-            Montants du mois en FCFA{outstanding > 0 ? ` · ${formatAmount(outstanding)} restent à encaisser` : ''}
+            Montants de {formatPeriod(shown)} en FCFA{outstanding > 0 ? ` · ${formatAmount(outstanding)} restent à encaisser` : ''}
           </Text>
+          <MonthSwitcher />
 
           {property.landlordName || (canManage && isRemote && organizations.find((o) => o.id === organizationId)?.type === 'agency') ? (
             <Pressable
@@ -203,7 +209,7 @@ export default function BienDetail() {
 
           <SegmentedTabs
             tabs={[
-              { key: 'unites', label: `Unités · ${s.units.length}` },
+              { key: 'unites', label: propertyTypes[property.type].singleUnit ? 'Logement' : 'Unités' },
               { key: 'locataires', label: 'Locataires' },
               { key: 'historique', label: 'Paiements' },
               { key: 'depenses', label: 'Dépenses' },
@@ -267,7 +273,7 @@ export default function BienDetail() {
                   );
                 })}
               </Card>
-              {canManage ? (
+              {canManage && !propertyTypes[property.type].singleUnit ? (
               <Button
                 label="Ajouter des unités"
                 icon={Plus}
