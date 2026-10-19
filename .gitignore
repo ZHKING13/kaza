@@ -47,3 +47,6 @@ yarn-error.*
 google-services.json
 *-firebase-adminsdk-*.json
 docs/agents/
+
+# Écrans bruts des captures des stores (régénérés)
+store/brut/
