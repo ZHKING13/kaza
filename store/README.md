@@ -17,9 +17,10 @@ Tout ce qu'il faut pour les fiches Google Play et App Store.
 
 ### Bloquant
 
-- [ ] **Suppression du compte dans l'application** (obligatoire chez Apple et Google) : écran *Plus › Paramètres ›
-      Supprimer mon compte* et route API correspondante.
-- [ ] **Page web de demande de suppression** (Google l'exige en plus) : URL à renseigner dans la Play Console.
+- [x] **Suppression du compte dans l'application** (obligatoire chez Apple et Google) : *Plus › Paramètres › Supprimer
+      mon compte*.
+- [x] **Page web de demande de suppression** (Google l'exige en plus) : `https://<API>/api/v1/public/account-deletion`,
+      à renseigner dans la Play Console ; renseigner `SUPPORT_EMAIL` et `SUPPORT_WHATSAPP` sur le serveur.
 - [ ] **Politique de confidentialité publiée** sur une URL publique, champs `[À COMPLÉTER]` remplis (raison sociale,
       adresse, e-mail, hébergeur, prestataires, autorité de protection des données).
 - [ ] **API de production** en ligne (les captures et l'examen se font sur la vraie app).

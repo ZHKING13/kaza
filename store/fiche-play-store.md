@@ -73,7 +73,7 @@ Côte d'Ivoire, Sénégal, Cameroun, Bénin, Togo, Burkina Faso, Mali… en fran
 | Téléphone (facultatif) | `[À COMPLÉTER]` |
 | Site web | `[À COMPLÉTER : https://…]` |
 | Politique de confidentialité | `[À COMPLÉTER : URL publique de politique-de-confidentialite.html]` |
-| Suppression du compte (URL) | `[À COMPLÉTER : page web de demande de suppression]` — **obligatoire** |
+| Suppression du compte (URL) | `https://[À COMPLÉTER : domaine de l'API]/api/v1/public/account-deletion` — **obligatoire** |
 
 ## Visuels
 

@@ -60,9 +60,11 @@ offrent des garanties de sécurité et de confidentialité suffisantes.
 - Compte et données de gestion : tant que votre compte est actif.
 - Notifications dans l'application : 90 jours.
 - Codes de connexion : quelques minutes.
-- Factures d'abonnement et quittances : [À COMPLÉTER : durée légale de conservation comptable applicable, par exemple
-  10 ans selon l'Acte uniforme OHADA], même après la suppression du compte, sous une forme limitée à cette obligation.
-- Après une demande de suppression de compte : effacement ou anonymisation sous **30 jours**, sauf obligation légale.
+- Suppression du compte depuis l'application : immédiate. Votre profil est anonymisé ; les espaces dont vous êtes
+  propriétaire sont effacés avec toutes leurs données (biens, locataires, paiements, quittances, photos).
+- Demande de suppression par le support : traitée sous **30 jours**.
+- Paiements d'abonnement : les montants et dates restent dans la comptabilité de Kaza lorsque la loi l'exige
+  ([À COMPLÉTER : durée légale applicable, par exemple 10 ans selon l'Acte uniforme OHADA]), sans vos données de gestion.
 
 ## 5. Sécurité
 
@@ -80,8 +82,8 @@ ivoirienne n° 2013-450 du 19 juin 2013 ; loi sénégalaise n° 2008-12 du 25 ja
 
 - accéder à vos données et en obtenir une copie ;
 - les faire corriger ;
-- **supprimer votre compte** : dans l'application (**Plus › Paramètres › Supprimer mon compte**) ou depuis
-  [À COMPLÉTER : URL de la page de demande de suppression] ;
+- **supprimer votre compte** : dans l'application (**Plus › Paramètres › Supprimer mon compte**), effet immédiat, ou
+  depuis https://[À COMPLÉTER : domaine de l'API]/api/v1/public/account-deletion, sous 30 jours ;
 - vous opposer à un traitement ou en demander la limitation ;
 - couper les notifications à tout moment (**Plus › Paramètres › Notifications**).
 

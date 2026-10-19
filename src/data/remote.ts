@@ -127,6 +127,11 @@ export type SubscriptionDetail = {
   invoices: SubscriptionInvoice[];
 };
 
+export type AccountDeletionPreview = {
+  owned: { id: string; name: string; units: number; tenants: number; otherMembers: number }[];
+  memberOf: { id: string; name: string }[];
+};
+
 /** Membre d'un espace */
 export type TeamMember = {
   userId: string;
@@ -531,6 +536,10 @@ function imagePath(orgId: string, target: ImageTarget, id?: string): string {
 
 export const remote = {
   me: () => api.get<{ user: ApiUser; organizations: ApiOrganization[] }>('/user/me'),
+  /** Ce que la suppression du compte efface : espaces possédés (avec leurs données) et espaces rejoints */
+  deletionPreview: () => api.get<AccountDeletionPreview>('/user/me/deletion'),
+  /** Supprime le compte (définitif) */
+  deleteAccount: () => api.post<void>('/user/me/delete', { confirmation: 'SUPPRIMER' }),
 
   updateProfile: (firstName: string, lastName: string) => api.patch<ApiUser>('/user/me', { firstName, lastName }),
 

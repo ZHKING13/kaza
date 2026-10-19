@@ -260,6 +260,8 @@ Snapshot : `expenses`, `expenseSchedules`, mandant sur `properties`. Rapports ca
 | POST | `/user/me/push-devices` | `{ token: "ExponentPushToken[…]", platform: ios\|android, appVersion? }` | — | utilisateur | démarrage, « Activer les notifications » |
 | POST | `/user/me/push-devices/remove` | `{ token }` | — | utilisateur | déconnexion |
 | GET / PATCH | `/user/me/notification-settings` | `{ payments?, late?, lease?, subscription?, team?, teamPayments? }` | `{ …types, devices }` | utilisateur | Paramètres › Mes notifications |
+| GET | `/user/me/deletion` | — | `{ owned: [{ id, name, units, tenants, otherMembers }], memberOf: [{ id, name }] }` | utilisateur | Paramètres › Supprimer mon compte |
+| POST | `/user/me/delete` | `{ confirmation: "SUPPRIMER" }` | — (définitif) | utilisateur | Paramètres › Supprimer mon compte |
 | GET | `/user/me/notifications` | `?before=<createdAt>&limit=30` | `{ items: [{ id, organizationId, category, title, body, data, readAt, createdAt }], unread, hasMore }` | utilisateur | Accueil › cloche |
 | POST | `/user/me/notifications/read` | `{ ids? }` (toutes sans `ids`) | `{ unread }` | utilisateur | Notifications › « Tout marquer comme lu », ou toucher une notification |
 
