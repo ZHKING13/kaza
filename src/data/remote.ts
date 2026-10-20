@@ -11,7 +11,9 @@ import type {
   ExpenseMethod,
   ExpenseSchedule,
   Payment,
+  PaymentDeclaration,
   PaymentMethod,
+  PayoutMethod,
   Property,
   PropertyType,
   Settlement,
@@ -61,6 +63,8 @@ export type ApiOrganization = {
   leases?: LeaseSettings;
   /** Liens de paiement mobile money disponibles (agrégateur configuré sur le serveur) */
   onlinePaymentsEnabled?: boolean;
+  /** Numéros où les locataires paient directement (espace locataire) */
+  payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
   /** Offre en vigueur (essai, payée, grâce, mode limité) */
   subscription?: OrganizationSubscription;
   role: Role;
@@ -239,7 +243,34 @@ type ApiLease = {
   depositMonths: number;
   advanceMonths: number;
   settlement: ApiSettlement | null;
+  /** Lien de l'espace locataire ; null après le départ */
+  tenantLink?: string | null;
 };
+
+type ApiDeclaration = {
+  id: string;
+  leaseId: string;
+  amount: number;
+  method: PaymentMethod;
+  paidOn: string;
+  reference: string | null;
+  note: string | null;
+  proofUrl: string | null;
+  status: 'pending' | 'confirmed' | 'rejected';
+  createdAt: string;
+};
+
+export const toDeclaration = (d: ApiDeclaration): PaymentDeclaration => ({
+  id: d.id,
+  tenantId: d.leaseId,
+  amount: d.amount,
+  method: d.method,
+  paidOn: localNoon(d.paidOn),
+  reference: d.reference ?? undefined,
+  note: d.note ?? undefined,
+  proofUrl: d.proofUrl ?? undefined,
+  createdAt: d.createdAt,
+});
 
 type ApiSettlement = {
   id: string;
@@ -282,6 +313,7 @@ type ApiSnapshot = {
   payments: ApiPayment[];
   expenses?: ApiExpense[];
   expenseSchedules?: ApiExpenseSchedule[];
+  paymentDeclarations?: ApiDeclaration[];
 };
 
 export type ApiExpense = {
@@ -347,6 +379,7 @@ export type RemoteData = {
   payments: Payment[];
   expenses: Expense[];
   expenseSchedules: ExpenseSchedule[];
+  declarations: PaymentDeclaration[];
 };
 
 /** Les dates calendaires du serveur sont lues à midi heure locale (même jour partout). */
@@ -390,6 +423,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
         }
       : undefined,
     settlement: l.settlement ? toSettlement(l.settlement) : undefined,
+    portalUrl: l.tenantLink ?? undefined,
     advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
   }));
   // Loyer du mois en cours des baux actifs, par unité
@@ -420,6 +454,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
     payments,
     expenses: (s.expenses ?? []).map(toExpense),
     expenseSchedules: (s.expenseSchedules ?? []).map(toExpenseSchedule),
+    declarations: (s.paymentDeclarations ?? []).map(toDeclaration),
   };
 }
 
@@ -511,6 +546,8 @@ export type AllocationBody = {
   method: PaymentMethod;
   startPeriod?: string;
   receivedAt: string;
+  /** Paiement signalé par le locataire que cet encaissement confirme */
+  declarationId?: string;
 };
 
 export type PaymentBody = {
@@ -548,8 +585,22 @@ export const remote = {
 
   updateOrganization: (
     orgId: string,
-    body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> },
+    body: {
+      prorataRule?: ProrataRule;
+      name?: string;
+      messaging?: Partial<MessagingSettings>;
+      leases?: Partial<LeaseSettings>;
+      payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
+    },
   ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+
+  /** Refuse un paiement signalé par un locataire (le motif s'affiche dans son espace) */
+  rejectDeclaration: (orgId: string, declarationId: string, reason: string) =>
+    api.post<ApiDeclaration>(`/user/organizations/${orgId}/payment-declarations/${declarationId}/reject`, { reason }),
+
+  /** Nouveau lien de l'espace locataire ; l'ancien ne fonctionne plus */
+  regenerateTenantLink: (orgId: string, leaseId: string) =>
+    api.post<{ leaseId: string; url: string }>(`/user/organizations/${orgId}/leases/${leaseId}/tenant-link`, {}),
 
   subscription: (orgId: string) => api.get<SubscriptionDetail>(`/user/organizations/${orgId}/subscription`),
 

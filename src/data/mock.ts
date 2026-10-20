@@ -1,6 +1,16 @@
 import { periodOf } from '@/lib/format';
 
-import type { Expense, ExpenseSchedule, Payment, PaymentMethod, Property, Tenant, Unit } from './types';
+import type {
+  Expense,
+  ExpenseSchedule,
+  Payment,
+  PaymentDeclaration,
+  PaymentMethod,
+  PayoutAccount,
+  Property,
+  Tenant,
+  Unit,
+} from './types';
 
 /** Données d'exemple : 3 biens à Abidjan, 19 unités, 17 locataires. */
 
@@ -85,6 +95,39 @@ export function demoTenants(today: Date): Tenant[] {
       return { ...x, entryDate: at(-8), notice: { from: 'tenant' as const, date: at(0, -5), exitDate: at(1, -5), reason: 'Mutation' } };
     return x;
   });
+}
+
+/** Démo : numéros du bailleur affichés dans l'espace des locataires */
+export const demoPayoutAccounts: PayoutAccount[] = [
+  { method: 'wave', number: '+2250700112233', name: 'Kouassi Brou' },
+  { method: 'orange', number: '+2250787112233' },
+];
+
+/** Démo : deux paiements signalés par des locataires depuis leur espace, à confirmer */
+export function demoDeclarations(today: Date): PaymentDeclaration[] {
+  const at = (days: number, hour = 12) =>
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() + days, hour).toISOString();
+  return [
+    {
+      id: 'd1',
+      tenantId: 't10',
+      amount: 40000,
+      method: 'wave',
+      paidOn: at(0),
+      reference: 'T5Q8-2K91',
+      note: 'Loyer de ce mois, désolé pour le retard',
+      createdAt: at(0, 9),
+    },
+    {
+      id: 'd2',
+      tenantId: 't8',
+      amount: 35000,
+      method: 'cash',
+      paidOn: at(-1),
+      note: 'Remis à votre collecteur samedi',
+      createdAt: at(-1, 18),
+    },
+  ];
 }
 
 function day(base: Date, monthOffset: number, d: number): string {

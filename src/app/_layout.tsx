@@ -68,6 +68,8 @@ function RootStack() {
           <Stack.Screen name="offre" options={{ title: 'Mon offre' }} />
           <Stack.Screen name="journal" options={{ title: 'Journal d’activité' }} />
           <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+          <Stack.Screen name="declarations" options={{ title: 'Paiements à confirmer' }} />
+          <Stack.Screen name="paiement-direct" options={{ title: 'Paiement direct' }} />
           <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
           <Stack.Screen name="bien/[id]/mandant" options={{ title: 'Propriétaire du bien', presentation: 'modal' }} />
           <Stack.Screen name="depense/nouvelle" options={{ title: 'Nouvelle dépense', presentation: 'modal' }} />

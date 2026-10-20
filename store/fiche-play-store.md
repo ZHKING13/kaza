@@ -33,6 +33,7 @@ QUITTANCES ET RELANCES SUR WHATSAPP
 • Quittance PDF à vos couleurs (logo, cachet, signature)
 • Relance en un geste depuis votre WhatsApp, ou envoyée automatiquement par Kaza
 • Lien de paiement mobile money : le locataire paie, le loyer s'enregistre tout seul
+• Espace locataire : chaque locataire voit ce qui reste à payer et ses quittances, vous paie directement sur votre Wave ou Mobile Money et vous signale son paiement, sans application
 
 TOUS VOS BIENS AU MÊME ENDROIT
 • Cours communes, immeubles, villas, magasins, avec leurs unités

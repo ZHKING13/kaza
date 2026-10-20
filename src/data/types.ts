@@ -52,6 +52,8 @@ export type Tenant = {
   /** Préavis en cours */
   notice?: Notice;
   settlement?: Settlement;
+  /** Lien de l'espace locataire (compte en ligne, bail en cours) */
+  portalUrl?: string;
 };
 
 /** Révision du loyer : `amount` à partir du mois `from` ("YYYY-MM"). */
@@ -136,4 +138,25 @@ export type ExpenseSchedule = {
   dayOfMonth: number;
   /** Premier mois, "YYYY-MM" */
   startPeriod: string;
+};
+
+/** Opérateur où le locataire peut payer directement le bailleur */
+export type PayoutMethod = 'wave' | 'orange' | 'mtn' | 'moov';
+
+/** Numéro où les locataires paient directement (affiché dans leur espace) */
+export type PayoutAccount = { method: PayoutMethod; number: string; name?: string };
+
+/** Paiement signalé par un locataire depuis son espace (« J'ai payé »), à confirmer ou refuser */
+export type PaymentDeclaration = {
+  id: string;
+  tenantId: string;
+  amount: number;
+  method: PaymentMethod;
+  /** Jour du paiement indiqué par le locataire (ISO, midi) */
+  paidOn: string;
+  reference?: string;
+  note?: string;
+  /** Capture d'écran envoyée par le locataire (lien signé) */
+  proofUrl?: string;
+  createdAt: string;
 };

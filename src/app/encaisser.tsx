@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, FileText, MessageCircle } from 'lucide-react-native';
+import { Check, FileText, Hand, MessageCircle } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,8 +36,10 @@ const ORDER: Record<RentStatus, number> = { late: 0, partial: 1, upcoming: 2, pa
 
 export default function Encaisser() {
   const { c, status } = useTheme();
-  const params = useLocalSearchParams<{ tenantId?: string; propertyId?: string }>();
-  const { collectPayment, today, period, outbox, settings, tenants, units, payments } = useStore();
+  const params = useLocalSearchParams<{ tenantId?: string; propertyId?: string; declarationId?: string }>();
+  const { collectPayment, today, period, outbox, settings, tenants, units, payments, declarations } = useStore();
+  // Paiement signalé par le locataire depuis son espace : montant, moyen et date repris
+  const [declaration] = useState(() => declarations.find((d) => d.id === params.declarationId));
   const summaries = useTenantSummaries();
 
   // Tous les locataires en place : ceux à jour peuvent payer d'avance. En retard d'abord.
@@ -73,9 +75,9 @@ export default function Encaisser() {
   const owed = months.filter((m) => m.period <= period).reduce((s, m) => s + m.remaining, 0);
   const monthRent = months.find((m) => m.period === period)?.due ?? selected?.rent ?? 0;
 
-  const [amountText, setAmountText] = useState(() => String(owed || monthRent || ''));
+  const [amountText, setAmountText] = useState(() => String(declaration?.amount ?? (owed || monthRent || '')));
   const [startPeriod, setStartPeriod] = useState<string | undefined>();
-  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [method, setMethod] = useState<PaymentMethod>(declaration?.method ?? 'cash');
   const [done, setDone] = useState<{ amount: number; payments: Payment[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
@@ -122,7 +124,14 @@ export default function Encaisser() {
     setSaving(true);
     setSaveError(undefined);
     try {
-      const created = await collectPayment({ tenantId: selected.tenant.id, amount, method, date: new Date().toISOString(), startPeriod });
+      const created = await collectPayment({
+        tenantId: selected.tenant.id,
+        amount,
+        method,
+        date: declaration && declaration.tenantId === selected.tenant.id ? declaration.paidOn : new Date().toISOString(),
+        startPeriod,
+        declarationId: declaration && declaration.tenantId === selected.tenant.id ? declaration.id : undefined,
+      });
       setDone({ amount, payments: created });
     } catch (e) {
       setSaveError(errorMessage(e));
@@ -193,6 +202,17 @@ export default function Encaisser() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ padding: space.md, gap: space.lg, paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">
+        {declaration ? (
+          <View style={{ flexDirection: 'row', gap: space.sm, backgroundColor: c.primarySoft, borderRadius: radius.md, padding: space.sm }}>
+            <Hand size={20} color={c.primary} />
+            <Text variant="small" style={{ flex: 1 }}>
+              Paiement signalé par le locataire : {formatAmount(declaration.amount)} ({methods[declaration.method].label}) le{' '}
+              {formatDate(declaration.paidOn)}
+              {declaration.reference ? `, référence ${declaration.reference}` : ''}. Vérifiez que l’argent est bien arrivé avant
+              d’encaisser.
+            </Text>
+          </View>
+        ) : null}
         <View style={{ gap: space.xs }}>
           <Label>Locataire</Label>
           {params.tenantId && selected ? (

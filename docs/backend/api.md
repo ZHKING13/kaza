@@ -239,6 +239,31 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
   « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
 - Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
 
+## Espace locataire — **implémenté**
+
+Chaque bail en cours a un lien personnel (`leases[].tenantLink` dans le snapshot, `portalUrl` dans l'application) :
+page web sans compte où le locataire voit ce qui reste à payer, ses quittances, les numéros où payer directement le
+bailleur, et signale un paiement (« J'ai payé »).
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| PATCH | `…/organizations/:id` | `{ payoutAccounts: [{ method, number, name }] }` | `Organization` | propriétaire, gérant | Plus › Paiement direct |
+| GET | `…/payment-declarations?status=pending\|all` | — | `{ declarations: [PaymentDeclaration] }` | tous | Paiements à confirmer |
+| POST | `…/payment-declarations/:id/reject` | `{ reason }` | `PaymentDeclaration` | propriétaire, gérant, collecteur | Paiements à confirmer › Refuser |
+| POST | `…/payments/allocations` | `{ …, declarationId }` | `{ payments }` | propriétaire, gérant, collecteur | Paiements à confirmer › Encaisser |
+| POST | `…/leases/:id/tenant-link` | — | `{ leaseId, url }` | propriétaire, gérant | Fiche › Espace locataire › Nouveau lien |
+| GET | `/public/l/:code` | — | page HTML | locataire | — |
+
+`PaymentDeclaration = { id, leaseId, amount, method, paidOn, reference, note, proofUrl, status, rejectReason, decidedAt, createdAt }`,
+`status` ∈ `pending | confirmed | rejected`. Le snapshot porte `paymentDeclarations` (en attente) ; l'espace porte
+`payoutAccounts` (`method` ∈ `wave | orange | mtn | moov`, numéro E.164, 4 au plus).
+
+- Confirmer = encaisser avec `declarationId` : la déclaration passe `confirmed` avec les paiements, une seule fois
+  (`declarationAlreadyConfirmed`, 409). Refuser hors ligne passe par la file d'envoi (`rejectDeclaration`).
+- Notification `payments` « Paiement à confirmer », `data.screen = "declarations"`.
+- Journal : `payment_declaration.created`, `payment_declaration.confirmed`, `payment_declaration.rejected`,
+  `tenant_link.regenerated`.
+
 ## Dépenses — **implémentées** (étape 12)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |

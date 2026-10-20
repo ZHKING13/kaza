@@ -20,7 +20,7 @@ import {
   type RentRevisionBody,
   type UnitBody,
 } from './remote';
-import type { Payment, Settlement } from './types';
+import type { Payment, PayoutMethod, Settlement } from './types';
 
 /**
  * File d'envoi : écritures faites sans réseau (ou pendant qu'une panne serveur dure), gardées sur le
@@ -36,7 +36,12 @@ export type OutboxOp =
   | {
       kind: 'updateOrganization';
       orgId: string;
-      body: { prorataRule?: ProrataRule; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> };
+      body: {
+        prorataRule?: ProrataRule;
+        messaging?: Partial<MessagingSettings>;
+        leases?: Partial<LeaseSettings>;
+        payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
+      };
     }
   | { kind: 'createProperty'; orgId: string; body: PropertyBody }
   | { kind: 'addUnits'; orgId: string; propertyId: string; units: UnitBody[] }
@@ -61,7 +66,9 @@ export type OutboxOp =
   | { kind: 'updateExpense'; orgId: string; expenseId: string; body: ExpenseUpdateBody }
   | { kind: 'voidExpense'; orgId: string; expenseId: string; reason: string }
   | { kind: 'stopExpenseSchedule'; orgId: string; scheduleId: string }
-  | { kind: 'updateLandlord'; orgId: string; propertyId: string; body: LandlordBody };
+  | { kind: 'updateLandlord'; orgId: string; propertyId: string; body: LandlordBody }
+  /** Paiement signalé par un locataire, refusé (argent pas reçu) */
+  | { kind: 'rejectDeclaration'; orgId: string; declarationId: string; reason: string };
 
 export type OutboxEntry = OutboxOp & {
   /** Clé Idempotency-Key, identique à chaque tentative */
@@ -162,6 +169,9 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       return { kind: 'done' };
     case 'updateLandlord':
       await remote.updateLandlord(entry.orgId, entry.propertyId, entry.body);
+      return { kind: 'done' };
+    case 'rejectDeclaration':
+      await remote.rejectDeclaration(entry.orgId, entry.declarationId, entry.reason);
       return { kind: 'done' };
   }
 }

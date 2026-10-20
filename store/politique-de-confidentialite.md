@@ -27,6 +27,7 @@ Contact pour toute question sur vos données : **[À COMPLÉTER : e-mail]**.
 | Photos | Photo d'un bien, logo, cachet, justificatif | Illustrer vos biens et documents |
 | Contacts du téléphone | **Uniquement le contact que vous choisissez**, pour remplir la fiche d'un locataire | Gagner du temps à la saisie ; votre carnet d'adresses n'est jamais envoyé ni lu en entier |
 | Messages | Relances, quittances et liens de paiement envoyés par Kaza à vos locataires, et leur statut | Vous fournir l'envoi automatique et son historique |
+| Espace locataire | Numéros où vos locataires vous paient ; paiements qu'ils signalent (montant, moyen, date, référence, message, capture d'écran facultative) | Permettre à vos locataires de voir ce qu'ils doivent, de vous payer directement et de vous signaler leurs paiements |
 | Abonnement | Offre choisie, factures, paiement par mobile money | Facturation |
 | Appareil | Jeton de notification, système (Android ou iOS), version de l'app, attestation d'intégrité de l'application | Notifications, sécurité de la connexion (lutte contre les envois de codes abusifs) |
 | Journal d'activité | Qui a encaissé, annulé ou modifié quoi, et quand | Traçabilité au sein de votre équipe |
@@ -51,6 +52,13 @@ Uniquement les prestataires nécessaires au service, chacun pour sa mission :
 
 Les membres de votre équipe (gérant, collecteur, lecteur) voient les données de l'espace selon leur rôle. Vos
 locataires ne voient que les messages, quittances et liens de paiement qui les concernent.
+
+**Espace locataire** : chaque locataire reçoit un lien personnel vers une page qui affiche son prénom, son logement, ce
+qui reste à payer, l'historique de ses loyers et ses quittances, ainsi que vos numéros de paiement et le nom que vous
+avez choisi d'afficher. Ce lien est signé et impossible à deviner ; la page n'est pas référencée par les moteurs de
+recherche. Vous pouvez créer un nouveau lien à tout moment (l'ancien cesse alors de fonctionner) et le lien est
+désactivé au départ du locataire. Les paiements signalés et leurs captures d'écran sont visibles par vous et votre
+équipe, et supprimés avec votre espace.
 
 Certains prestataires peuvent traiter les données hors de votre pays ; nous ne choisissons que des prestataires qui
 offrent des garanties de sécurité et de confidentialité suffisantes.

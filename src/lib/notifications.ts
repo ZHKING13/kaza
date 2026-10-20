@@ -109,5 +109,8 @@ export async function openNotificationTarget(data: PushData, workspace: Workspac
     case 'team':
       router.push('/equipe');
       break;
+    case 'declarations':
+      router.push('/declarations');
+      break;
   }
 }

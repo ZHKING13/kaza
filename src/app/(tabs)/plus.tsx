@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   MailOpen,
   Settings,
+  Smartphone,
   UsersRound,
 } from 'lucide-react-native';
 import { useState } from 'react';
@@ -86,7 +87,7 @@ export default function Plus() {
   const { c } = useTheme();
   const { settings, profile, mode, session, signOut, outbox, remote, organizations, organizationId, invitations, switchOrganization, identity } =
     useStore();
-  const { role, canAudit } = usePermissions();
+  const { role, canAudit, canManage } = usePermissions();
   const plan = usePlan();
   const [confirmOut, setConfirmOut] = useState(false);
   const [switchError, setSwitchError] = useState<string>();
@@ -185,6 +186,14 @@ export default function Plus() {
           hint={identity.legalName ?? undefined}
           onPress={() => router.push('/identite')}
         />
+        {canManage && (remote || mode === 'demo') ? (
+          <Row
+            icon={Smartphone}
+            label="Paiement direct"
+            hint={settings.payoutAccounts?.length ? `${settings.payoutAccounts.length} numéro${settings.payoutAccounts.length > 1 ? 's' : ''}` : 'À configurer'}
+            onPress={() => router.push('/paiement-direct')}
+          />
+        ) : null}
         <Row icon={FileText} label="Rapports et exports" onPress={() => router.push('/rapports')} />
         <Row
           icon={Settings}

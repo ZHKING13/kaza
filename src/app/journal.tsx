@@ -32,6 +32,16 @@ export function describeActivity(e: ActivityEntry): string {
       const method = typeof d.method === 'string' && d.method in methods ? ` par ${methods[d.method as PaymentMethod].label}` : '';
       return `${subject} a payé ${amount} en ligne${method} — ${period}`;
     }
+    case 'payment_declaration.created': {
+      const method = typeof d.method === 'string' && d.method in methods ? ` (${methods[d.method as PaymentMethod].label})` : '';
+      return `${subject || 'Un locataire'} a signalé un paiement de ${amount}${method} depuis son espace`;
+    }
+    case 'payment_declaration.confirmed':
+      return `${who} a confirmé un paiement signalé de ${amount} — ${subject}`;
+    case 'payment_declaration.rejected':
+      return `${who} a refusé un paiement signalé de ${amount} — ${subject}${typeof d.reason === 'string' ? ` (« ${d.reason} »)` : ''}`;
+    case 'tenant_link.regenerated':
+      return `${who} a créé un nouveau lien d’espace locataire — ${subject}`;
     case 'payment_request.created':
       return `${who} a envoyé un lien de paiement de ${amount} — ${subject}, ${period}`;
     case 'payment_request.cancelled':

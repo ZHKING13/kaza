@@ -15,7 +15,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { storageKeyOf, toDataUri } from '@/lib/images';
 
-import { buildPayments, demoExpenses, demoTenants, properties, units } from './mock';
+import { buildPayments, demoDeclarations, demoExpenses, demoPayoutAccounts, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
 import { type OrganizationSubscription, type PlanId, type PlanLimits, plans } from './plans';
 import { type ProrataRule, rentForPeriod } from './prorata';
@@ -52,7 +52,9 @@ import type {
   ExpenseSchedule,
   Notice,
   Payment,
+  PaymentDeclaration,
   PaymentMethod,
+  PayoutAccount,
   Property,
   RentRevision,
   Settlement,
@@ -75,6 +77,8 @@ export type Settings = {
   leases?: LeaseSettings;
   /** Offre en vigueur de l'espace (compte en ligne) */
   subscription?: OrganizationSubscription;
+  /** Numéros où les locataires paient directement (espace locataire) */
+  payoutAccounts?: PayoutAccount[];
 };
 
 /**
@@ -150,6 +154,8 @@ type State = {
   expenses: Expense[];
   /** Dépenses qui reviennent chaque mois, en cours */
   expenseSchedules: ExpenseSchedule[];
+  /** Paiements signalés par les locataires depuis leur espace, à confirmer ou refuser */
+  declarations: PaymentDeclaration[];
 };
 
 type Action =
@@ -176,6 +182,7 @@ type Action =
   | { type: 'replaceLeasePayments'; leaseId: string; removeIds: string[]; payments: Payment[] }
   | { type: 'setSettlement'; tenantId: string; settlement: Settlement }
   | { type: 'removePayment'; paymentId: string }
+  | { type: 'removeDeclaration'; declarationId: string }
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'setProfile'; profile: Partial<Profile> }
   | { type: 'addPayment'; payment: Payment }
@@ -239,6 +246,7 @@ function reducer(state: State, action: Action): State {
         payments: [],
         expenses: [],
         expenseSchedules: [],
+        declarations: [],
         syncedAt: null,
         settings: { prorata: 'full' },
         identity: emptyIdentity,
@@ -255,6 +263,7 @@ function reducer(state: State, action: Action): State {
         payments: [],
         expenses: [],
         expenseSchedules: [],
+        declarations: [],
         syncedAt: null,
         outbox: [],
         settings: { prorata: 'full' },
@@ -279,6 +288,8 @@ function reducer(state: State, action: Action): State {
         ...state,
         tenants: state.tenants.map((t) => (t.id === action.tenantId ? { ...t, settlement: action.settlement } : t)),
       };
+    case 'removeDeclaration':
+      return { ...state, declarations: state.declarations.filter((d) => d.id !== action.declarationId) };
     case 'removePayment':
       return { ...state, payments: state.payments.filter((p) => p.id !== action.paymentId) };
     case 'replaceLeasePayments': {
@@ -309,6 +320,11 @@ function reducer(state: State, action: Action): State {
           onlinePayments: action.data.organization.onlinePaymentsEnabled ?? false,
           leases: action.data.organization.leases ?? state.settings.leases,
           subscription: action.data.organization.subscription ?? state.settings.subscription,
+          payoutAccounts: (action.data.organization.payoutAccounts ?? []).map((a) => ({
+            method: a.method,
+            number: a.number,
+            name: a.name ?? undefined,
+          })),
         },
         properties: action.data.properties.map((p) => ({ ...p, photo: p.photo ?? photos.get(p.id) })),
         identity: identity ? mergeIdentity(state.identity, identity) : state.identity,
@@ -317,6 +333,7 @@ function reducer(state: State, action: Action): State {
         payments: action.data.payments,
         expenses: action.data.expenses,
         expenseSchedules: action.data.expenseSchedules,
+        declarations: action.data.declarations,
         syncedAt: action.syncedAt,
       };
     }
@@ -453,6 +470,12 @@ type Store = State & {
   declineInvitation: (invitationId: string) => Promise<void>;
   /** Quitte l'espace ouvert (pas le sien) : ouvre un autre espace, ou revient à l'onboarding */
   leaveOrganization: (myUserId: string) => Promise<void>;
+  /** Numéros où les locataires paient directement (affichés dans leur espace) */
+  setPayoutAccounts: (accounts: PayoutAccount[]) => Promise<void>;
+  /** Refuse un paiement signalé par un locataire (argent pas reçu) ; le motif s'affiche dans son espace */
+  rejectDeclaration: (declarationId: string, reason: string) => Promise<void>;
+  /** Nouveau lien de l'espace locataire (réseau nécessaire) ; l'ancien ne fonctionne plus */
+  regenerateTenantLink: (tenantId: string) => Promise<string>;
   /** Relance tout de suite l'envoi des écritures en attente */
   retryOutbox: () => void;
   dismissOutboxFailures: () => void;
@@ -466,6 +489,8 @@ export type Collect = {
   date: string;
   /** Mois choisi ; par défaut le plus ancien mois non soldé */
   startPeriod?: string;
+  /** Paiement signalé par le locataire que cet encaissement confirme */
+  declarationId?: string;
 };
 
 export type NewExpense = Omit<Expense, 'id' | 'scheduleId' | 'receipt'> & {
@@ -574,6 +599,7 @@ function emptyState(): State {
     payments: [],
     expenses: [],
     expenseSchedules: [],
+    declarations: [],
     outbox: [],
     outboxFailures: [],
   };
@@ -590,6 +616,8 @@ function demoState(today: Date): Partial<State> {
     tenants: demoTenants(today),
     payments: buildPayments(today),
     ...demoExpenses(today),
+    declarations: demoDeclarations(today),
+    settings: { prorata: 'full', payoutAccounts: demoPayoutAccounts },
   };
 }
 
@@ -1044,6 +1072,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
       },
+      setPayoutAccounts: async (accounts) => {
+        const apply = () => dispatch({ type: 'setSettings', settings: { payoutAccounts: accounts } });
+        if (online && organizationRef.current) {
+          await write(
+            {
+              kind: 'updateOrganization',
+              orgId: organizationRef.current,
+              body: { payoutAccounts: accounts.map((a) => ({ method: a.method, number: a.number, name: a.name ?? null })) },
+              label: 'Numéros de paiement direct',
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      rejectDeclaration: async (declarationId, reason) => {
+        const declaration = state.declarations.find((d) => d.id === declarationId);
+        const apply = () => dispatch({ type: 'removeDeclaration', declarationId });
+        if (online && organizationRef.current) {
+          await write(
+            {
+              kind: 'rejectDeclaration',
+              orgId: organizationRef.current,
+              declarationId,
+              reason,
+              label: `Paiement signalé refusé (${formatAmount(declaration?.amount ?? 0)})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      regenerateTenantLink: async (tenantId) => {
+        if (!online || !organizationRef.current) {
+          throw new Error('L’espace locataire demande un compte Kaza en ligne.');
+        }
+        const { url } = await remote.regenerateTenantLink(organizationRef.current, tenantId);
+        dispatch({ type: 'updateTenant', tenantId, patch: { portalUrl: url } });
+        return url;
+      },
       setProfile: async (profile) => {
         const apply = () => dispatch({ type: 'setProfile', profile });
         const firstName = profile.firstName ?? state.profile.firstName;
@@ -1081,7 +1151,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apply();
         return id;
       },
-      collectPayment: async ({ tenantId, amount, method, date, startPeriod }) => {
+      collectPayment: async ({ tenantId, amount, method, date, startPeriod, declarationId }) => {
         const tenant = state.tenants.find((t) => t.id === tenantId)!;
         const unit = state.units.find((u) => u.id === tenant.unitId)!;
         const allocation = allocatePayment({
@@ -1109,6 +1179,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
         const apply = () => {
           for (const payment of [...payments].reverse()) dispatch({ type: 'addPayment', payment });
+          if (declarationId) dispatch({ type: 'removeDeclaration', declarationId });
         };
         if (online) {
           const orgId = await ensureOrganization();
@@ -1116,7 +1187,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             {
               kind: 'allocatePayment',
               orgId,
-              body: { ids: payments.map((p) => p.id), leaseId: tenantId, amount, method, startPeriod, receivedAt: date },
+              body: {
+                ids: payments.map((p) => p.id),
+                leaseId: tenantId,
+                amount,
+                method,
+                startPeriod,
+                receivedAt: date,
+                ...(declarationId ? { declarationId } : {}),
+              },
               localPaymentIds: payments.map((p) => p.id),
               label: `Encaissement de ${formatAmount(amount)} (${tenant.firstName} ${tenant.lastName})`,
             },

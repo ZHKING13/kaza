@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { KazaMessages } from '@/components/KazaMessages';
 import { LeaseEndBanner, LeaseTerms } from '@/components/LeaseTerms';
 import { OnlinePayment } from '@/components/OnlinePayment';
+import { TenantSpace } from '@/components/TenantSpace';
 import { MethodDot } from '@/components/MethodDot';
 import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
@@ -165,7 +166,9 @@ export default function LocataireDetail() {
     `Bonjour ${tenant.firstName}, le loyer de ${formatPeriod(period)} (${formatAmount(summary.due)}) ` +
     (summary.paid > 0 ? `est payé en partie : il reste ${formatAmount(current)}. ` : `était attendu le ${formatDate(summary.dueDate)}. `) +
     (arrears > 0 ? `Il reste aussi ${formatAmount(arrears)} sur ${late.map((m) => formatPeriod(m.period)).join(', ')}. ` : '') +
-    `Merci de régulariser dès que possible. Kaza`;
+    `Merci de régulariser dès que possible.` +
+    (tenant.portalUrl ? ` Pour payer ou signaler un paiement : ${tenant.portalUrl}` : '') +
+    ` Kaza`;
 
   return (
     <>
@@ -246,6 +249,8 @@ export default function LocataireDetail() {
         </Card>
 
         <LeaseTerms tenant={tenant} unit={unit} canManage={canManage} />
+
+        <TenantSpace tenant={tenant} />
 
         {/* Le lien règle le mois en cours (montant calculé par le serveur) */}
         <OnlinePayment leaseId={tenant.id} remaining={current} canSend={canCollect} />

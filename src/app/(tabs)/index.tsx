@@ -1,4 +1,4 @@
-import { Bell, CircleAlert, DoorOpen, Receipt, Send } from 'lucide-react-native';
+import { Bell, ChevronRight, CircleAlert, DoorOpen, Hand, Receipt, Send } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, View } from 'react-native';
@@ -32,7 +32,7 @@ function greeting(d: Date) {
 
 export default function Accueil() {
   const { c, status } = useTheme();
-  const { payments, today, period, profile, mode, remote, signOut, invitations, organizations, organizationId } = useStore();
+  const { payments, today, period, profile, mode, remote, signOut, invitations, organizations, organizationId, declarations } = useStore();
   const unread = useUnreadNotifications();
   useFocusEffect(
     useCallback(() => {
@@ -183,6 +183,34 @@ export default function Accueil() {
               </Pressable>
             ) : null}
           </>
+        ) : null}
+
+        {declarations.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint="Ouvre les paiements signalés par les locataires"
+            onPress={() => router.push('/declarations')}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.sm,
+              backgroundColor: pressed ? c.surfaceAlt : c.primarySoft,
+              borderRadius: radius.md,
+              padding: space.md,
+            })}>
+            <Hand size={22} color={c.primary} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="bodyStrong" tone="primary">
+                {declarations.length === 1
+                  ? '1 paiement signalé à confirmer'
+                  : `${declarations.length} paiements signalés à confirmer`}
+              </Text>
+              <Text variant="small" tone="muted">
+                {formatAmount(declarations.reduce((sum, d) => sum + d.amount, 0))} payés directement par vos locataires
+              </Text>
+            </View>
+            <ChevronRight size={20} color={c.primary} />
+          </Pressable>
         ) : null}
 
         {totals.lateCount > 0 ? (
