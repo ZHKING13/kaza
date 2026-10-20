@@ -31,7 +31,7 @@ import { type OrganizationSubscription, plans } from '@/data/plans';
 import { roleLabels, usePermissions, usePlan, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { FormError } from '@/components/FormError';
-import { createAccountFromDemo } from '@/lib/demo';
+import { createAccountFromDemo, demoSignupLabel } from '@/lib/demo';
 import { formatDate, formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
@@ -94,7 +94,7 @@ export default function Plus() {
   return (
     <Screen title="Plus">
       {mode === 'demo' ? (
-        <DemoBanner action={{ label: 'Créer mon compte', onPress: () => createAccountFromDemo(signOut) }}>
+        <DemoBanner action={{ label: demoSignupLabel, onPress: () => createAccountFromDemo(signOut) }}>
           Vous explorez la démo : les biens et locataires sont fictifs.
         </DemoBanner>
       ) : null}

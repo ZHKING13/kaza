@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { FileText, type LucideIcon, MessageCircle, Smartphone } from 'lucide-react-native';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { KazaMark } from '@/components/KazaMark';
 import { KazaWordmark } from '@/components/KazaWordmark';
 import { Text } from '@/components/Text';
 import { useStore } from '@/data/store';
+import { isWebDemo } from '@/lib/demo';
 import { fonts, radius, space, useTheme } from '@/theme';
 
 function Point({ icon: Icon, title, body }: { icon: LucideIcon; title: string; body: string }) {
@@ -38,6 +40,11 @@ function Point({ icon: Icon, title, body }: { icon: LucideIcon; title: string; b
 export default function Bienvenue() {
   const { c } = useTheme();
   const { startDemo } = useStore();
+  // Démo du site vitrine : pas d'écran d'accueil, on entre directement dans la démo
+  useEffect(() => {
+    if (isWebDemo) startDemo();
+  }, [startDemo]);
+  if (isWebDemo) return null;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, padding: space.lg, gap: space.xl, justifyContent: 'space-between' }}>

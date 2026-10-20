@@ -17,7 +17,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { DemoBanner } from '@/components/DemoBanner';
 import { PaymentRow } from '@/components/PaymentRow';
 import { StartChecklist } from '@/components/StartChecklist';
-import { createAccountFromDemo } from '@/lib/demo';
+import { createAccountFromDemo, demoSignupLabel } from '@/lib/demo';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Text } from '@/components/Text';
 import { useMonthTotals, usePermissions, useReport, useStore, useTenantSummaries } from '@/data/store';
@@ -98,7 +98,7 @@ export default function Accueil() {
           </View>
         }>
         {mode === 'demo' ? (
-          <DemoBanner action={{ label: 'Créer mon compte', onPress: () => createAccountFromDemo(signOut) }}>
+          <DemoBanner action={{ label: demoSignupLabel, onPress: () => createAccountFromDemo(signOut) }}>
             Vous explorez la démo : biens et locataires fictifs.
           </DemoBanner>
         ) : null}
