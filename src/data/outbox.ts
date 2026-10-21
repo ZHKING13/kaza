@@ -4,6 +4,7 @@ import type { ProrataRule } from './prorata';
 import type { LeaseSettings } from './rent';
 import {
   type ApiOrganization,
+  type AllocationBody,
   type DepartureBody,
   type ExpenseBody,
   type ExpenseUpdateBody,
@@ -19,7 +20,7 @@ import {
   type RentRevisionBody,
   type UnitBody,
 } from './remote';
-import type { Payment, Settlement } from './types';
+import type { Payment, PayoutMethod, Settlement } from './types';
 
 /**
  * File d'envoi : écritures faites sans réseau (ou pendant qu'une panne serveur dure), gardées sur le
@@ -35,13 +36,20 @@ export type OutboxOp =
   | {
       kind: 'updateOrganization';
       orgId: string;
-      body: { prorataRule?: ProrataRule; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> };
+      body: {
+        prorataRule?: ProrataRule;
+        messaging?: Partial<MessagingSettings>;
+        leases?: Partial<LeaseSettings>;
+        payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
+      };
     }
   | { kind: 'createProperty'; orgId: string; body: PropertyBody }
   | { kind: 'addUnits'; orgId: string; propertyId: string; units: UnitBody[] }
   /** `localPaymentIds` : avance calculée sur le téléphone, remplacée par celle du serveur après l'envoi */
   | { kind: 'createLease'; orgId: string; body: LeaseBody; localPaymentIds: string[] }
   | { kind: 'createPayment'; orgId: string; body: PaymentBody }
+  /** Encaissement sur plusieurs mois ; `localPaymentIds` : répartition calculée sur le téléphone, remplacée par celle du serveur */
+  | { kind: 'allocatePayment'; orgId: string; body: AllocationBody; localPaymentIds: string[] }
   | { kind: 'voidPayment'; orgId: string; paymentId: string; reason: string }
   /** `localPaymentIds` : retenues sur caution calculées sur le téléphone, remplacées par celles du serveur */
   | { kind: 'recordDeparture'; orgId: string; leaseId: string; body: DepartureBody; localPaymentIds: string[] }
@@ -58,7 +66,9 @@ export type OutboxOp =
   | { kind: 'updateExpense'; orgId: string; expenseId: string; body: ExpenseUpdateBody }
   | { kind: 'voidExpense'; orgId: string; expenseId: string; reason: string }
   | { kind: 'stopExpenseSchedule'; orgId: string; scheduleId: string }
-  | { kind: 'updateLandlord'; orgId: string; propertyId: string; body: LandlordBody };
+  | { kind: 'updateLandlord'; orgId: string; propertyId: string; body: LandlordBody }
+  /** Paiement signalé par un locataire, refusé (argent pas reçu) */
+  | { kind: 'rejectDeclaration'; orgId: string; declarationId: string; reason: string };
 
 export type OutboxEntry = OutboxOp & {
   /** Clé Idempotency-Key, identique à chaque tentative */
@@ -110,6 +120,10 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
     case 'createPayment':
       await remote.createPayment(entry.orgId, entry.body, entry.key);
       return { kind: 'done' };
+    case 'allocatePayment': {
+      const payments = await remote.allocatePayment(entry.orgId, entry.body, entry.key);
+      return { kind: 'lease', leaseId: entry.body.leaseId, payments, localPaymentIds: entry.localPaymentIds };
+    }
     case 'voidPayment':
       await remote.voidPayment(entry.orgId, entry.paymentId, entry.reason);
       return { kind: 'done' };
@@ -155,6 +169,9 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       return { kind: 'done' };
     case 'updateLandlord':
       await remote.updateLandlord(entry.orgId, entry.propertyId, entry.body);
+      return { kind: 'done' };
+    case 'rejectDeclaration':
+      await remote.rejectDeclaration(entry.orgId, entry.declarationId, entry.reason);
       return { kind: 'done' };
   }
 }

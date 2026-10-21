@@ -7,6 +7,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { FormError } from '@/components/FormError';
 import { PhoneField } from '@/components/PhoneField';
 import { Text } from '@/components/Text';
@@ -39,7 +40,8 @@ export default function Equipe() {
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState<string | null>(null);
-  const [confirmLeave, setConfirmLeave] = useState(false);
+  /** Action à confirmer (retirer un membre, annuler une invitation, quitter l'espace) */
+  const [ask, setAsk] = useState<{ title: string; message: string; label: string; run: () => Promise<unknown> } | null>(null);
 
   const load = useCallback(async () => {
     if (!organizationId) return;
@@ -128,7 +130,17 @@ export default function Equipe() {
                       label="Retirer de l’espace"
                       variant="ghost"
                       compact
-                      onPress={() => act(() => remote.removeMember(organizationId!, m.userId))}
+                      onPress={() =>
+                        setAsk({
+                          title: `Retirer ${[m.firstName, m.lastName].filter(Boolean).join(' ') || 'ce membre'} ?`,
+                          message: 'Cette personne n’aura plus accès aux biens et locataires de l’espace. Vous pourrez l’inviter de nouveau.',
+                          label: 'Retirer de l’espace',
+                          run: async () => {
+                            await remote.removeMember(organizationId!, m.userId);
+                            await load();
+                          },
+                        })
+                      }
                     />
                   </View>
                 ) : null}
@@ -162,7 +174,22 @@ export default function Equipe() {
                   </Text>
                 </View>
                 {isOwner ? (
-                  <Button label="Annuler" variant="ghost" compact onPress={() => act(() => remote.revokeInvitation(organizationId!, inv.id))} />
+                  <Button
+                    label="Annuler"
+                    variant="ghost"
+                    compact
+                    onPress={() =>
+                      setAsk({
+                        title: 'Annuler cette invitation ?',
+                        message: `${formatPhone(inv.phone)} ne pourra plus rejoindre l’espace avec cette invitation.`,
+                        label: 'Annuler l’invitation',
+                        run: async () => {
+                          await remote.revokeInvitation(organizationId!, inv.id);
+                          await load();
+                        },
+                      })
+                    }
+                  />
                 ) : null}
               </View>
             ))}
@@ -175,26 +202,30 @@ export default function Equipe() {
       <FormError message={error} />
 
       {me && me.role !== 'owner' ? (
-        confirmLeave ? (
-          <Card style={{ gap: space.sm }}>
-            <Text variant="bodyStrong">Quitter « {organization?.name} » ?</Text>
-            <Text variant="small" tone="muted">
-              Vous n’aurez plus accès à ses biens et locataires. Il faudra une nouvelle invitation pour revenir.
-            </Text>
-            <View style={{ flexDirection: 'row', gap: space.xs }}>
-              <Button label="Rester" variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmLeave(false)} />
-              <Button
-                label="Quitter"
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => leaveOrganization(me.userId).catch((e) => setError(errorMessage(e)))}
-              />
-            </View>
-          </Card>
-        ) : (
-          <Button label="Quitter cet espace" variant="ghost" onPress={() => setConfirmLeave(true)} />
-        )
+        <Button
+          label="Quitter cet espace"
+          variant="ghost"
+          onPress={() =>
+            setAsk({
+              title: `Quitter « ${organization?.name} » ?`,
+              message: 'Vous n’aurez plus accès à ses biens et locataires. Il faudra une nouvelle invitation pour revenir.',
+              label: 'Quitter l’espace',
+              run: () => leaveOrganization(me.userId),
+            })
+          }
+        />
       ) : null}
+
+      <ConfirmSheet
+        visible={!!ask}
+        title={ask?.title ?? ''}
+        message={ask?.message}
+        confirmLabel={ask?.label ?? ''}
+        onClose={() => setAsk(null)}
+        onConfirm={async () => {
+          await ask?.run();
+        }}
+      />
     </ScrollView>
   );
 }

@@ -1,14 +1,16 @@
 import { Stack } from 'expo-router';
-import { BellRing } from 'lucide-react-native';
+import { BellRing, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Chip } from '@/components/Chip';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { FormError } from '@/components/FormError';
 import { Text } from '@/components/Text';
+import { TextField } from '@/components/TextField';
 import { type ProrataRule, prorataRules, rentForPeriod } from '@/data/prorata';
-import type { MessagingSettings } from '@/data/remote';
+import { type AccountDeletionPreview, type MessagingSettings, remote } from '@/data/remote';
 import { defaultLeaseSettings, type LeaseSettings } from '@/data/rent';
 import { usePermissions, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
@@ -117,7 +119,85 @@ export default function Parametres() {
             : 'Vos biens, locataires et paiements sont enregistrés sur ce téléphone. Tant que la synchronisation n’est pas activée, ils ne sont pas récupérables sur un autre appareil.'}
         </Text>
       </View>
+      {remote ? <DeleteAccountSection /> : null}
     </ScrollView>
+  );
+}
+
+/** Suppression du compte (exigée par Google Play et l'App Store) : ce qui part, puis confirmation tapée. */
+function DeleteAccountSection() {
+  const { c, status } = useTheme();
+  const { signOut } = useStore();
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<AccountDeletionPreview | null>(null);
+  const [typed, setTyped] = useState('');
+  const [loadError, setLoadError] = useState<string>();
+
+  const start = async () => {
+    setTyped('');
+    setLoadError(undefined);
+    setOpen(true);
+    try {
+      setPreview(await remote.deletionPreview());
+    } catch (e) {
+      setLoadError(errorMessage(e));
+    }
+  };
+  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+  return (
+    <View style={{ gap: space.xs, marginTop: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: c.border }}>
+      <Text variant="h3" accessibilityRole="header">
+        Supprimer mon compte
+      </Text>
+      <Text variant="small" tone="muted">
+        Efface votre profil et les espaces dont vous êtes propriétaire, avec leurs biens, locataires, paiements et photos. C’est
+        définitif.
+      </Text>
+      <Button label="Supprimer mon compte" icon={Trash2} variant="ghost" onPress={start} style={{ alignSelf: 'flex-start' }} />
+      <ConfirmSheet
+        visible={open}
+        title="Supprimer votre compte ?"
+        message="Cette action est définitive : rien ne pourra être récupéré."
+        confirmLabel="Supprimer définitivement"
+        icon={Trash2}
+        onClose={() => setOpen(false)}
+        onConfirm={async () => {
+          if (typed.trim().toUpperCase() !== 'SUPPRIMER') throw new Error('Tapez SUPPRIMER pour confirmer.');
+          await remote.deleteAccount();
+          // Le serveur a fermé les sessions : on efface ce téléphone et on revient à l'accueil
+          signOut();
+        }}>
+        {loadError ? <FormError message={loadError} /> : null}
+        {preview ? (
+          <View style={{ gap: space.xs }}>
+            {preview.owned.map((o) => (
+              <Text key={o.id} variant="small" color={status.late.fg}>
+                • {o.name} : {plural(o.units, 'logement')}, {plural(o.tenants, 'locataire')} supprimés
+                {o.otherMembers ? ` ; ${plural(o.otherMembers, 'membre')} de l’équipe perdront l’accès` : ''}.
+              </Text>
+            ))}
+            {preview.memberOf.map((o) => (
+              <Text key={o.id} variant="small" tone="muted">
+                • Vous quittez {o.name} (ses données restent à son propriétaire).
+              </Text>
+            ))}
+          </View>
+        ) : !loadError ? (
+          <Text variant="small" tone="muted">
+            Chargement…
+          </Text>
+        ) : null}
+        <TextField
+          label="Tapez SUPPRIMER pour confirmer"
+          value={typed}
+          onChangeText={setTyped}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          placeholder="SUPPRIMER"
+        />
+      </ConfirmSheet>
+    </View>
   );
 }
 
@@ -125,7 +205,7 @@ const PUSH_ROWS: { key: PushCategory; title: string; hint: string }[] = [
   { key: 'payments', title: 'Paiements reçus', hint: 'Un locataire a payé par mobile money.' },
   { key: 'late', title: 'Loyers en retard', hint: 'Un récapitulatif à 9 h, les jours où des loyers restent dus.' },
   { key: 'lease', title: 'Fins de contrat et préavis', hint: '30 jours avant, 7 jours avant et le jour même.' },
-  { key: 'subscription', title: 'Mon offre', hint: 'Paiement confirmé, essai ou offre bientôt terminés.' },
+  { key: 'subscription', title: 'Mon offre', hint: 'Paiement confirmé, offre de bienvenue ou offre bientôt terminées.' },
   { key: 'team', title: 'Équipe', hint: 'Une personne invitée a rejoint l’espace.' },
   { key: 'teamPayments', title: 'Encaissements de l’équipe', hint: 'Chaque loyer saisi par un gérant ou un collecteur.' },
 ];

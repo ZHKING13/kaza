@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Share, View } from 'react-native';
 
 import { Button } from './Button';
+import { ConfirmSheet } from './ConfirmSheet';
 import { Card } from './Card';
 import { FormError } from './FormError';
 import { Text } from './Text';
@@ -88,15 +89,11 @@ export function OnlinePayment({ leaseId, remaining, canSend }: { leaseId: string
       message: `Lien pour payer le loyer de ${formatPeriod(r.period)} (${formatAmount(r.amount)}) par Wave, Orange Money, MTN ou Moov : ${r.link}`,
     }).catch(() => {});
 
+  const [cancelling, setCancelling] = useState<PaymentRequest | null>(null);
   const cancel = async (r: PaymentRequest) => {
-    setError(undefined);
-    try {
-      await remote.cancelPaymentRequest(organizationId!, r.id);
-      if (sent?.id === r.id) setSent(null);
-      await load();
-    } catch (e) {
-      setError(errorMessage(e));
-    }
+    await remote.cancelPaymentRequest(organizationId!, r.id);
+    if (sent?.id === r.id) setSent(null);
+    await load();
   };
 
   return (
@@ -151,7 +148,7 @@ export function OnlinePayment({ leaseId, remaining, canSend }: { leaseId: string
                 </Text>
               </View>
               {r.status === 'pending' && canSend ? (
-                <Button label="Annuler" variant="ghost" compact onPress={() => cancel(r)} />
+                <Button label="Annuler" variant="ghost" compact onPress={() => setCancelling(r)} />
               ) : (
                 <Text
                   variant="small"
@@ -164,6 +161,19 @@ export function OnlinePayment({ leaseId, remaining, canSend }: { leaseId: string
         </Card>
       ) : null}
       <FormError message={error} />
+      <ConfirmSheet
+        visible={!!cancelling}
+        title="Annuler ce lien de paiement ?"
+        message={
+          cancelling
+            ? `Le locataire ne pourra plus payer ${formatAmount(cancelling.amount)} (${formatPeriod(cancelling.period)}) avec ce lien. Un paiement déjà fait reste enregistré.`
+            : undefined
+        }
+        confirmLabel="Annuler le lien"
+        cancelLabel="Garder le lien"
+        onClose={() => setCancelling(null)}
+        onConfirm={() => cancel(cancelling!)}
+      />
     </View>
   );
 }

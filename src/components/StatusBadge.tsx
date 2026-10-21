@@ -13,11 +13,15 @@ const icons: Record<RentStatus, LucideIcon> = {
   vacant: DoorOpen,
 };
 
-/** Statut de loyer : toujours une icône + un libellé, jamais la couleur seule. */
-export function StatusBadge({ status, style }: { status: RentStatus; style?: ViewStyle }) {
+/**
+ * Statut de loyer : toujours une icône + un libellé, jamais la couleur seule. Mois payé (ou à venir) mais des mois
+ * plus anciens restent dus : « Arriérés ».
+ */
+export function StatusBadge({ status, arrears = 0, style }: { status: RentStatus; arrears?: number; style?: ViewStyle }) {
   const { status: palette } = useTheme();
-  const s = palette[status];
-  const Icon = icons[status];
+  const behind = arrears > 0 && (status === 'paid' || status === 'upcoming');
+  const s = behind ? { ...palette.late, label: 'Arriérés' } : palette[status];
+  const Icon = behind ? CircleAlert : icons[status];
   return (
     <View
       accessibilityLabel={`Statut : ${s.label}`}

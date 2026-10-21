@@ -75,7 +75,7 @@ rôle insuffisant : 403 `roleForbidden`. Lecture : tous les rôles ; écriture :
 | POST | `…/properties` | `{ name, type, district, city, description?, units: [{ label, rent }] }` | `PropertyDetail` | Nouveau bien, onboarding |
 | GET | `…/properties/:id` | `?period=2026-10` | `PropertyDetail` | Fiche bien |
 | PATCH | `…/properties/:id` | champs du bien | `PropertyDetail` | — |
-| POST | `…/properties/:id/units` | `{ units: [{ label, rent }] }` | `[unit]` (409 `unitLabelTaken`) | Ajouter des unités |
+| POST | `…/properties/:id/units` | `{ units: [{ label, rent }] }` | `[unit]` (409 `unitLabelTaken` ; villa ou magasin : une seule unité, 422 `singleUnit`) | Ajouter des unités |
 | POST | `…/uploads/property-photo` | `{ contentType }` | `{ uploadUrl, photoKey }` | **à faire** (stockage objet) |
 
 `PropertySummary = { id, name, type, district, city, description, photoKey, period, unitCount, occupiedCount, vacantCount, occupancy, expected, collected, lateCount }`
@@ -175,7 +175,8 @@ Erreurs : `alreadyEnded` (409), `exitBeforeEntry` (422), `notFound` (404).
 | Méthode | Route | Corps / paramètres | Réponse | Écran |
 |---|---|---|---|---|
 | GET | `…/payments` | `?period=2026-10&leaseId=&includeVoided=false&cursor=&limit=50` | `{ items: [Payment], nextCursor }` | Paiements, historique (du plus récent au plus ancien ; l'application utilise le snapshot) |
-| POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt? }` + `Idempotency-Key` | `Payment` — **implémenté** (owner, manager, collector ; `periodBeforeEntry`, `periodAfterExit`) | Encaisser |
+| POST | `…/payments` | `{ leaseId, amount, method, period, receivedAt? }` + `Idempotency-Key` | `Payment` — **implémenté** (owner, manager, collector ; `periodBeforeEntry`, `periodAfterExit` ; au-delà du reste dû du mois : `amountTooHigh` 422 `{ maxAmount, lastPeriod }`) | — |
+| POST | `…/payments/allocations` | `{ ids?, leaseId, amount, method, startPeriod?, receivedAt? }` + `Idempotency-Key` | `{ payments: [Payment] }` — impayés plus anciens d'abord, puis `startPeriod` et les mois suivants, 12 mois d'avance au plus, un paiement par mois (`amountTooHigh` 422 au-delà) | Encaisser |
 | POST | `…/payments/:id/void` | `{ reason }` | `Payment` (owner, manager ; déjà annulé : renvoyé tel quel ; bail terminé : `leaseEnded` 409) | Quittance → « Annuler ce paiement » |
 | GET | `…/payments/:id/receipt` | — | `ReceiptData` (quittance ou reçu partiel) | Quittance (à venir) |
 
@@ -238,6 +239,31 @@ avec `kind` ∈ `rent_due_soon | rent_late | rent_manual | receipt | welcome | s
   « payé en ligne ». Journal : `payment_request.created`, `payment_request.cancelled`, `payment.received`.
 - Erreurs : `onlinePaymentsDisabled`, `leaseEnded`, `notPending` (409), `nothingDue` (422), `notFound` (404).
 
+## Espace locataire — **implémenté**
+
+Chaque bail en cours a un lien personnel (`leases[].tenantLink` dans le snapshot, `portalUrl` dans l'application) :
+page web sans compte où le locataire voit ce qui reste à payer, ses quittances, les numéros où payer directement le
+bailleur, et signale un paiement (« J'ai payé »).
+
+| Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
+|---|---|---|---|---|---|
+| PATCH | `…/organizations/:id` | `{ payoutAccounts: [{ method, number, name }] }` | `Organization` | propriétaire, gérant | Plus › Paiement direct |
+| GET | `…/payment-declarations?status=pending\|all` | — | `{ declarations: [PaymentDeclaration] }` | tous | Paiements à confirmer |
+| POST | `…/payment-declarations/:id/reject` | `{ reason }` | `PaymentDeclaration` | propriétaire, gérant, collecteur | Paiements à confirmer › Refuser |
+| POST | `…/payments/allocations` | `{ …, declarationId }` | `{ payments }` | propriétaire, gérant, collecteur | Paiements à confirmer › Encaisser |
+| POST | `…/leases/:id/tenant-link` | — | `{ leaseId, url }` | propriétaire, gérant | Fiche › Espace locataire › Nouveau lien |
+| GET | `/public/l/:code` | — | page HTML | locataire | — |
+
+`PaymentDeclaration = { id, leaseId, amount, method, paidOn, reference, note, proofUrl, status, rejectReason, decidedAt, createdAt }`,
+`status` ∈ `pending | confirmed | rejected`. Le snapshot porte `paymentDeclarations` (en attente) ; l'espace porte
+`payoutAccounts` (`method` ∈ `wave | orange | mtn | moov`, numéro E.164, 4 au plus).
+
+- Confirmer = encaisser avec `declarationId` : la déclaration passe `confirmed` avec les paiements, une seule fois
+  (`declarationAlreadyConfirmed`, 409). Refuser hors ligne passe par la file d'envoi (`rejectDeclaration`).
+- Notification `payments` « Paiement à confirmer », `data.screen = "declarations"`.
+- Journal : `payment_declaration.created`, `payment_declaration.confirmed`, `payment_declaration.rejected`,
+  `tenant_link.regenerated`.
+
 ## Dépenses — **implémentées** (étape 12)
 
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
@@ -259,9 +285,14 @@ Snapshot : `expenses`, `expenseSchedules`, mandant sur `properties`. Rapports ca
 | POST | `/user/me/push-devices` | `{ token: "ExponentPushToken[…]", platform: ios\|android, appVersion? }` | — | utilisateur | démarrage, « Activer les notifications » |
 | POST | `/user/me/push-devices/remove` | `{ token }` | — | utilisateur | déconnexion |
 | GET / PATCH | `/user/me/notification-settings` | `{ payments?, late?, lease?, subscription?, team?, teamPayments? }` | `{ …types, devices }` | utilisateur | Paramètres › Mes notifications |
+| GET | `/user/me/deletion` | — | `{ owned: [{ id, name, units, tenants, otherMembers }], memberOf: [{ id, name }] }` | utilisateur | Paramètres › Supprimer mon compte |
+| POST | `/user/me/delete` | `{ confirmation: "SUPPRIMER" }` | — (définitif) | utilisateur | Paramètres › Supprimer mon compte |
+| GET | `/user/me/notifications` | `?before=<createdAt>&limit=30` | `{ items: [{ id, organizationId, category, title, body, data, readAt, createdAt }], unread, hasMore }` | utilisateur | Accueil › cloche |
+| POST | `/user/me/notifications/read` | `{ ids? }` (toutes sans `ids`) | `{ unread }` | utilisateur | Notifications › « Tout marquer comme lu », ou toucher une notification |
 
 Notification : `title`, `body`, `data = { screen: tenant|late|subscription|team, organizationId, leaseId?, paymentId? }`.
 Envoi par le service push d'Expo ; un téléphone désinstallé est retiré seul. Jamais aux locataires.
+Chaque notification d'un type activé est aussi gardée 90 jours dans le centre de notifications (même sans téléphone).
 
 ## Abonnements — **implémentés** (étape 10)
 
@@ -272,7 +303,11 @@ Envoi par le service push d'Expo ; un téléphone désinstallé est retiré seul
 | PUT | `/system/subscriptions/:organizationId` | `{ plan, paidUntil?, trialEndsAt? }` | `Subscription` | clé système | Back office |
 
 `Subscription = { plan, status: trial|active|grace|expired|free, effectivePlan, endsAt, daysLeft, trialEndsAt, paidUntil,
-limits, usage: { units, members, messagesThisMonth }, billingAvailable, catalog, invoices }`. L'espace (`/user/me`,
+limits, usage: { units, members, messagesThisMonth }, billingAvailable, welcome, catalog, invoices }`.
+Pas d'essai : un espace démarre en offre Gratuit (3 logements, 5 messages Kaza par mois). `welcome = { endsAt, daysLeft,
+discounts: [{ months: 3, percent: 25 }, { months: 12, percent: 20 }] } | null` : offre de bienvenue, 30 jours après la
+création du compte du propriétaire, sur son premier paiement, une fois par personne. `catalog[].prices[] = { months,
+amount (à payer), fullAmount, percent }` ; la facture porte `welcomePercent`. L'espace (`/user/me`,
 snapshot) porte `subscription: { plan, status, effectivePlan, endsAt, daysLeft }`. Refus pour cause d'offre : 403
 `unitsLimit`, `membersLimit`, `featureLocked`, `messagesQuota`, avec `data.suggestedPlan` / `suggestedPlanLabel`.
 

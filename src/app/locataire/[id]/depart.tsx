@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Check, LogOut, MessageCircle, Plus, Square, SquareCheck, Trash2 } from 'lucide-react-native';
+import { Check, LogOut, MessageCircle, Square, SquareCheck, Trash2 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,8 +14,7 @@ import { MethodDot } from '@/components/MethodDot';
 import { PdfButton } from '@/components/PdfButton';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { useSettlementDoc } from '@/data/documents';
-import { FormError } from '@/components/FormError';
-import { errorMessage } from '@/lib/api';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { Text } from '@/components/Text';
 import { computeSettlement } from '@/data/ledger';
 import { prorataRules, rentForPeriod } from '@/data/prorata';
@@ -62,7 +61,7 @@ export default function DepartLocataire() {
   const [deductions, setDeductions] = useState<Deduction[]>([]);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>('cash');
   const [done, setDone] = useState<Settlement | null>(null);
-  const [saveError, setSaveError] = useState<string>();
+  const [confirming, setConfirming] = useState(false);
   const settlementDoc = useSettlementDoc(id);
 
   const preview = useMemo(
@@ -144,21 +143,23 @@ export default function DepartLocataire() {
     backgroundColor: c.surface,
   } as const;
 
+  // Une erreur levée reste affichée dans la fenêtre de confirmation
   const save = async () => {
-    setSaveError(undefined);
-    try {
-      const s = await recordDeparture({
-        tenantId: tenant.id,
-        exitDate,
-        deductArrears,
-        deductions: deductions.filter((d) => d.amount > 0).map(({ label, amount }) => ({ label: label.trim() || 'Retenue', amount })),
-        refundMethod,
-      });
-      setDone(s);
-    } catch (e) {
-      setSaveError(errorMessage(e));
-    }
+    const s = await recordDeparture({
+      tenantId: tenant.id,
+      exitDate,
+      deductArrears,
+      deductions: deductions.filter((d) => d.amount > 0).map(({ label, amount }) => ({ label: label.trim() || 'Retenue', amount })),
+      refundMethod,
+    });
+    setDone(s);
   };
+  const balanceText =
+    preview.balance > 0
+      ? `${formatAmount(preview.balance)} à rembourser à ${tenant.firstName}.`
+      : preview.balance < 0
+        ? `${tenant.firstName} reste devoir ${formatAmount(-preview.balance)}.`
+        : 'Aucun montant à régler.';
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -331,9 +332,17 @@ export default function DepartLocataire() {
         <Text variant="small" tone="muted" style={{ textAlign: 'center' }}>
           {unit.label} redeviendra vacante.
         </Text>
-        <FormError message={saveError} />
-        <Button label="Confirmer le départ" icon={Check} haptic onPress={save} />
+        <Button label="Confirmer le départ" icon={Check} haptic onPress={() => setConfirming(true)} />
       </View>
+      <ConfirmSheet
+        visible={confirming}
+        title={`Départ de ${tenant.firstName} ${tenant.lastName}`}
+        message={`Sortie le ${formatDate(exitDate)}. ${balanceText} ${unit.label} redeviendra vacante ; le départ ne peut pas être annulé.`}
+        confirmLabel="Valider le départ"
+        icon={LogOut}
+        onConfirm={save}
+        onClose={() => setConfirming(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

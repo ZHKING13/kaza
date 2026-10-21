@@ -7,10 +7,12 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
+import { MonthSwitcher } from '@/components/MonthSwitcher';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { TenantRow } from '@/components/TenantRow';
-import { useFormerTenants, usePermissions, useTenantSummaries } from '@/data/store';
+import { listStatus, useFormerTenants, usePermissions, useTenantSummaries } from '@/data/store';
+import { useViewPeriod } from '@/data/viewPeriod';
 import { Avatar } from '@/components/Avatar';
 import { formatDate } from '@/lib/format';
 import { fonts, radius, type RentStatus, space, useTheme } from '@/theme';
@@ -22,7 +24,8 @@ const order: Record<RentStatus, number> = { late: 0, partial: 1, upcoming: 2, pa
 export default function Locataires() {
   const { c } = useTheme();
   const { canManage } = usePermissions();
-  const summaries = useTenantSummaries();
+  const { period } = useViewPeriod();
+  const summaries = useTenantSummaries(period);
   const former = useFormerTenants();
   const [query, setQuery] = useState('');
   // Notification « loyers en retard » : la liste s'ouvre sur les retards
@@ -32,7 +35,7 @@ export default function Locataires() {
     if (filtre) setFilter(filtre);
   }, [filtre]);
 
-  const count = (s: RentStatus) => summaries.filter((x) => x.status === s).length;
+  const count = (s: RentStatus) => summaries.filter((x) => listStatus(x) === s).length;
   const filters: { key: Filter; label: string }[] = [
     { key: 'all', label: `Tous · ${summaries.length}` },
     { key: 'late', label: `En retard · ${count('late')}` },
@@ -45,11 +48,11 @@ export default function Locataires() {
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return summaries
-      .filter((s) => filter === 'all' || s.status === filter)
+      .filter((s) => filter === 'all' || listStatus(s) === filter)
       .filter(
         (s) => !q || `${s.tenant.firstName} ${s.tenant.lastName} ${s.unit.label} ${s.property.name}`.toLowerCase().includes(q),
       )
-      .sort((a, b) => order[a.status] - order[b.status] || a.tenant.lastName.localeCompare(b.tenant.lastName));
+      .sort((a, b) => order[listStatus(a)] - order[listStatus(b)] || a.tenant.lastName.localeCompare(b.tenant.lastName));
   }, [summaries, query, filter]);
 
   return (
@@ -81,6 +84,7 @@ export default function Locataires() {
           </Pressable>
           )
         }>
+        {filter !== 'former' ? <MonthSwitcher /> : null}
         <View
           style={{
             flexDirection: 'row',

@@ -6,7 +6,7 @@ import { AppState, Platform } from 'react-native';
 import { api, errorMessage, newIdempotencyKey } from '@/lib/api';
 import { endSession } from '@/lib/auth';
 import { isApiConfigured } from '@/lib/config';
-import { formatAmount, formatDate, periodOf } from '@/lib/format';
+import { formatAmount, formatDate, formatPeriod, periodOf } from '@/lib/format';
 import { periodsBetween } from '@/lib/dates';
 import { showToast } from '@/lib/toast';
 
@@ -15,7 +15,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { storageKeyOf, toDataUri } from '@/lib/images';
 
-import { buildPayments, demoExpenses, demoTenants, properties, units } from './mock';
+import { buildPayments, demoDeclarations, demoExpenses, demoPayoutAccounts, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
 import { type OrganizationSubscription, type PlanId, type PlanLimits, plans } from './plans';
 import { type ProrataRule, rentForPeriod } from './prorata';
@@ -45,13 +45,16 @@ import {
   type RemoteData,
   type Role,
 } from './remote';
+import { allocatePayment, leaseMonths, type LeaseMonth } from './allocation';
 import { buildReport, type Report } from './report';
 import type {
   Expense,
   ExpenseSchedule,
   Notice,
   Payment,
+  PaymentDeclaration,
   PaymentMethod,
+  PayoutAccount,
   Property,
   RentRevision,
   Settlement,
@@ -74,6 +77,8 @@ export type Settings = {
   leases?: LeaseSettings;
   /** Offre en vigueur de l'espace (compte en ligne) */
   subscription?: OrganizationSubscription;
+  /** Numéros où les locataires paient directement (espace locataire) */
+  payoutAccounts?: PayoutAccount[];
 };
 
 /**
@@ -149,6 +154,8 @@ type State = {
   expenses: Expense[];
   /** Dépenses qui reviennent chaque mois, en cours */
   expenseSchedules: ExpenseSchedule[];
+  /** Paiements signalés par les locataires depuis leur espace, à confirmer ou refuser */
+  declarations: PaymentDeclaration[];
 };
 
 type Action =
@@ -175,6 +182,7 @@ type Action =
   | { type: 'replaceLeasePayments'; leaseId: string; removeIds: string[]; payments: Payment[] }
   | { type: 'setSettlement'; tenantId: string; settlement: Settlement }
   | { type: 'removePayment'; paymentId: string }
+  | { type: 'removeDeclaration'; declarationId: string }
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'setProfile'; profile: Partial<Profile> }
   | { type: 'addPayment'; payment: Payment }
@@ -238,6 +246,7 @@ function reducer(state: State, action: Action): State {
         payments: [],
         expenses: [],
         expenseSchedules: [],
+        declarations: [],
         syncedAt: null,
         settings: { prorata: 'full' },
         identity: emptyIdentity,
@@ -254,6 +263,7 @@ function reducer(state: State, action: Action): State {
         payments: [],
         expenses: [],
         expenseSchedules: [],
+        declarations: [],
         syncedAt: null,
         outbox: [],
         settings: { prorata: 'full' },
@@ -278,12 +288,15 @@ function reducer(state: State, action: Action): State {
         ...state,
         tenants: state.tenants.map((t) => (t.id === action.tenantId ? { ...t, settlement: action.settlement } : t)),
       };
+    case 'removeDeclaration':
+      return { ...state, declarations: state.declarations.filter((d) => d.id !== action.declarationId) };
     case 'removePayment':
       return { ...state, payments: state.payments.filter((p) => p.id !== action.paymentId) };
     case 'replaceLeasePayments': {
       // L'avance calculée sur le téléphone est remplacée par celle du serveur (identifiants du serveur)
+      // Les paiements du serveur peuvent reprendre les identifiants du téléphone (encaissement réparti)
       const removed = new Set(action.removeIds);
-      const known = new Set(state.payments.map((p) => p.id));
+      const known = new Set(state.payments.filter((p) => !removed.has(p.id)).map((p) => p.id));
       return {
         ...state,
         payments: [...action.payments.filter((p) => !known.has(p.id)), ...state.payments.filter((p) => !removed.has(p.id))],
@@ -307,6 +320,11 @@ function reducer(state: State, action: Action): State {
           onlinePayments: action.data.organization.onlinePaymentsEnabled ?? false,
           leases: action.data.organization.leases ?? state.settings.leases,
           subscription: action.data.organization.subscription ?? state.settings.subscription,
+          payoutAccounts: (action.data.organization.payoutAccounts ?? []).map((a) => ({
+            method: a.method,
+            number: a.number,
+            name: a.name ?? undefined,
+          })),
         },
         properties: action.data.properties.map((p) => ({ ...p, photo: p.photo ?? photos.get(p.id) })),
         identity: identity ? mergeIdentity(state.identity, identity) : state.identity,
@@ -315,6 +333,7 @@ function reducer(state: State, action: Action): State {
         payments: action.data.payments,
         expenses: action.data.expenses,
         expenseSchedules: action.data.expenseSchedules,
+        declarations: action.data.declarations,
         syncedAt: action.syncedAt,
       };
     }
@@ -400,6 +419,11 @@ type Store = State & {
   signOut: () => void;
   /** Enregistre un paiement et renvoie son identifiant */
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<string>;
+  /**
+   * Encaisse un montant sur un ou plusieurs mois (impayés plus anciens d'abord, puis le mois choisi et les suivants) ;
+   * renvoie les paiements créés, un par mois. Refusé au-delà de ce qui reste dû jusqu'à 12 mois d'avance.
+   */
+  collectPayment: (input: Collect) => Promise<Payment[]>;
   setSettings: (settings: Partial<Settings>) => Promise<void>;
   setProfile: (profile: Partial<Profile>) => Promise<void>;
   /** Crée le bien et ses unités, renvoie l'identifiant du bien */
@@ -446,9 +470,27 @@ type Store = State & {
   declineInvitation: (invitationId: string) => Promise<void>;
   /** Quitte l'espace ouvert (pas le sien) : ouvre un autre espace, ou revient à l'onboarding */
   leaveOrganization: (myUserId: string) => Promise<void>;
+  /** Numéros où les locataires paient directement (affichés dans leur espace) */
+  setPayoutAccounts: (accounts: PayoutAccount[]) => Promise<void>;
+  /** Refuse un paiement signalé par un locataire (argent pas reçu) ; le motif s'affiche dans son espace */
+  rejectDeclaration: (declarationId: string, reason: string) => Promise<void>;
+  /** Nouveau lien de l'espace locataire (réseau nécessaire) ; l'ancien ne fonctionne plus */
+  regenerateTenantLink: (tenantId: string) => Promise<string>;
   /** Relance tout de suite l'envoi des écritures en attente */
   retryOutbox: () => void;
   dismissOutboxFailures: () => void;
+};
+
+export type Collect = {
+  tenantId: string;
+  amount: number;
+  method: PaymentMethod;
+  /** ISO */
+  date: string;
+  /** Mois choisi ; par défaut le plus ancien mois non soldé */
+  startPeriod?: string;
+  /** Paiement signalé par le locataire que cet encaissement confirme */
+  declarationId?: string;
 };
 
 export type NewExpense = Omit<Expense, 'id' | 'scheduleId' | 'receipt'> & {
@@ -557,6 +599,7 @@ function emptyState(): State {
     payments: [],
     expenses: [],
     expenseSchedules: [],
+    declarations: [],
     outbox: [],
     outboxFailures: [],
   };
@@ -573,6 +616,8 @@ function demoState(today: Date): Partial<State> {
     tenants: demoTenants(today),
     payments: buildPayments(today),
     ...demoExpenses(today),
+    declarations: demoDeclarations(today),
+    settings: { prorata: 'full', payoutAccounts: demoPayoutAccounts },
   };
 }
 
@@ -1027,6 +1072,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
       },
+      setPayoutAccounts: async (accounts) => {
+        const apply = () => dispatch({ type: 'setSettings', settings: { payoutAccounts: accounts } });
+        if (online && organizationRef.current) {
+          await write(
+            {
+              kind: 'updateOrganization',
+              orgId: organizationRef.current,
+              body: { payoutAccounts: accounts.map((a) => ({ method: a.method, number: a.number, name: a.name ?? null })) },
+              label: 'Numéros de paiement direct',
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      rejectDeclaration: async (declarationId, reason) => {
+        const declaration = state.declarations.find((d) => d.id === declarationId);
+        const apply = () => dispatch({ type: 'removeDeclaration', declarationId });
+        if (online && organizationRef.current) {
+          await write(
+            {
+              kind: 'rejectDeclaration',
+              orgId: organizationRef.current,
+              declarationId,
+              reason,
+              label: `Paiement signalé refusé (${formatAmount(declaration?.amount ?? 0)})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      regenerateTenantLink: async (tenantId) => {
+        if (!online || !organizationRef.current) {
+          throw new Error('L’espace locataire demande un compte Kaza en ligne.');
+        }
+        const { url } = await remote.regenerateTenantLink(organizationRef.current, tenantId);
+        dispatch({ type: 'updateTenant', tenantId, patch: { portalUrl: url } });
+        return url;
+      },
       setProfile: async (profile) => {
         const apply = () => dispatch({ type: 'setProfile', profile });
         const firstName = profile.firstName ?? state.profile.firstName;
@@ -1063,6 +1150,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         apply();
         return id;
+      },
+      collectPayment: async ({ tenantId, amount, method, date, startPeriod, declarationId }) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const unit = state.units.find((u) => u.id === tenant.unitId)!;
+        const allocation = allocatePayment({
+          rent: tenantRent(tenant, unit),
+          rule: state.settings.prorata,
+          entryDate: tenant.entryDate,
+          exitDate: tenant.exitDate,
+          payments: state.payments.filter((p) => p.tenantId === tenantId),
+          currentPeriod: periodOf(today),
+          startPeriod,
+          amount,
+        });
+        if (allocation.left > 0 || allocation.parts.length === 0) {
+          throw new Error(
+            `Ce montant dépasse ce qui reste dû : ${formatAmount(amount - allocation.left)} au plus, jusqu’à ${formatPeriod(allocation.lastPeriod)}.`,
+          );
+        }
+        const payments: Payment[] = allocation.parts.map((part) => ({
+          id: newId(),
+          tenantId,
+          amount: part.amount,
+          method,
+          date,
+          period: part.period,
+        }));
+        const apply = () => {
+          for (const payment of [...payments].reverse()) dispatch({ type: 'addPayment', payment });
+          if (declarationId) dispatch({ type: 'removeDeclaration', declarationId });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'allocatePayment',
+              orgId,
+              body: {
+                ids: payments.map((p) => p.id),
+                leaseId: tenantId,
+                amount,
+                method,
+                startPeriod,
+                receivedAt: date,
+                ...(declarationId ? { declarationId } : {}),
+              },
+              localPaymentIds: payments.map((p) => p.id),
+              label: `Encaissement de ${formatAmount(amount)} (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          return payments;
+        }
+        apply();
+        return payments;
       },
       addProperty: async (property, units) => {
         const id = newId();
@@ -1563,13 +1705,22 @@ export function useStore() {
 
 const dayKey = (d: Date) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
-/** Situation de chaque locataire pour le mois en cours. */
-export function useTenantSummaries(): TenantSummary[] {
-  const { tenants, units, properties, payments, today, period, settings } = useStore();
+/**
+ * Situation de chaque locataire pour un mois (par défaut le mois en cours). Pour un mois passé : les locataires
+ * présents ce mois-là, partis depuis compris ; un loyer non soldé y est en retard.
+ */
+export function useTenantSummaries(forPeriod?: string): TenantSummary[] {
+  const { tenants, units, properties, payments, today, period: current, settings } = useStore();
+  const period = forPeriod ?? current;
   return useMemo(
     () =>
       tenants
-        .filter((tenant) => !tenant.exitDate)
+        .filter((tenant) => {
+          if (period >= current) return !tenant.exitDate;
+          const entered = !tenant.entryDate || periodOf(new Date(tenant.entryDate)) <= period;
+          const stayed = !tenant.exitDate || periodOf(new Date(tenant.exitDate)) >= period;
+          return entered && stayed;
+        })
         .map((tenant) => {
           const unit = units.find((l) => l.id === tenant.unitId)!;
           const property = properties.find((p) => p.id === unit.propertyId)!;
@@ -1577,26 +1728,46 @@ export function useTenantSummaries(): TenantSummary[] {
             .filter((p) => p.tenantId === tenant.id && p.period === period)
             .reduce((sum, p) => sum + p.amount, 0);
           const entry = tenant.entryDate ? new Date(tenant.entryDate) : undefined;
-          // Entrée dans un mois futur : rien n'est attendu ce mois-ci
+          // Entrée dans un mois futur : rien n'est attendu ce mois-là
           const notStarted = !!entry && periodOf(entry) > period;
-          let dueDate = new Date(today.getFullYear(), today.getMonth(), tenant.dueDay);
+          const [y, m] = period.split('-').map(Number);
+          let dueDate = new Date(y, m - 1, Math.min(tenant.dueDay, new Date(y, m, 0).getDate()));
           if (entry && entry > dueDate) dueDate = entry;
           const schedule = tenantRent(tenant, unit);
-          const due = rentForPeriod(schedule, period, settings.prorata, tenant.entryDate).amount;
+          const due = rentForPeriod(schedule, period, settings.prorata, tenant.entryDate, tenant.exitDate).amount;
           const status: TenantSummary['status'] = notStarted
             ? 'upcoming'
             : paid >= due
               ? 'paid'
               : paid > 0
                 ? 'partial'
-                : // En retard le lendemain de l'échéance (même règle que periodRentStatus du serveur)
-                  dayKey(today) > dayKey(dueDate)
+                : period < current
                   ? 'late'
-                  : 'upcoming';
-          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString(), rent: rentAt(schedule, period) };
+                  : period > current
+                    ? 'upcoming'
+                    : // En retard le lendemain de l'échéance (même règle que periodRentStatus du serveur)
+                      dayKey(today) > dayKey(dueDate)
+                      ? 'late'
+                      : 'upcoming';
+          const arrears = leaseMonths({
+            rent: schedule,
+            rule: settings.prorata,
+            entryDate: tenant.entryDate,
+            exitDate: tenant.exitDate,
+            payments: payments.filter((p) => p.tenantId === tenant.id),
+            currentPeriod: current,
+          })
+            .filter((m) => m.period < period)
+            .reduce((sum, m) => sum + m.remaining, 0);
+          return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString(), rent: rentAt(schedule, period), arrears };
         }),
-    [tenants, units, properties, payments, today, period, settings.prorata],
+    [tenants, units, properties, payments, today, period, current, settings.prorata],
   );
+}
+
+/** Statut affiché dans les listes : un mois payé ou à venir avec des arriérés compte comme un retard. */
+export function listStatus(s: TenantSummary): TenantSummary['status'] {
+  return s.arrears > 0 && (s.status === 'paid' || s.status === 'upcoming') ? 'late' : s.status;
 }
 
 export type LeaseAlerts = {
@@ -1637,18 +1808,21 @@ export function useLeaseAlerts(): LeaseAlerts {
   }, [summaries, today, period, rules]);
 }
 
-export function useMonthTotals() {
-  const summaries = useTenantSummaries();
+export function useMonthTotals(period?: string) {
+  const summaries = useTenantSummaries(period);
   const { units } = useStore();
   return useMemo(() => {
     const expected = summaries.reduce((s, x) => s + x.due, 0);
     const collected = summaries.reduce((s, x) => s + Math.min(x.paid, x.due), 0);
-    const late = summaries.filter((x) => x.status === 'late' || x.status === 'partial');
+    const late = summaries.filter((x) => listStatus(x) === 'late' || x.status === 'partial');
+    const arrears = summaries.reduce((s, x) => s + x.arrears, 0);
     const occupied = new Set(summaries.map((x) => x.unit.id));
     return {
       expected,
       collected,
       outstanding: expected - collected,
+      /** Reste dû sur les mois précédents */
+      arrears,
       lateCount: late.length,
       paidCount: summaries.filter((x) => x.status === 'paid').length,
       tenantCount: summaries.length,
@@ -1668,10 +1842,10 @@ export type PropertySummary = {
   occupancy: number;
 };
 
-/** Situation de chaque bien pour le mois en cours. */
-export function usePropertySummaries(): PropertySummary[] {
+/** Situation de chaque bien pour un mois (par défaut le mois en cours). */
+export function usePropertySummaries(period?: string): PropertySummary[] {
   const { properties, units } = useStore();
-  const summaries = useTenantSummaries();
+  const summaries = useTenantSummaries(period);
   return useMemo(
     () =>
       properties.map((property) => {
@@ -1684,7 +1858,7 @@ export function usePropertySummaries(): PropertySummary[] {
           tenants: pTenants,
           expected: pTenants.reduce((s, x) => s + x.due, 0),
           collected: pTenants.reduce((s, x) => s + Math.min(x.paid, x.due), 0),
-          lateCount: pTenants.filter((x) => x.status === 'late' || x.status === 'partial').length,
+          lateCount: pTenants.filter((x) => listStatus(x) === 'late' || x.status === 'partial').length,
           vacantCount: pUnits.filter((u) => !occupied.has(u.id)).length,
           occupancy: pUnits.length ? occupied.size / pUnits.length : 0,
         };
@@ -1781,4 +1955,22 @@ export function useReport(from: string, to: string, propertyIds?: string[]): Rep
       rule: settings.prorata,
     });
   }, [properties, units, tenants, payments, expenses, settings.prorata, from, to, propertyIds]);
+}
+
+/** Mois d'un bail qui peuvent recevoir un paiement (de l'entrée à 12 mois d'avance), avec ce qui y reste dû. */
+export function useLeaseMonths(tenantId: string | undefined): LeaseMonth[] {
+  const { tenants, units, payments, settings, today } = useStore();
+  return useMemo(() => {
+    const tenant = tenants.find((t) => t.id === tenantId);
+    const unit = tenant && units.find((u) => u.id === tenant.unitId);
+    if (!tenant || !unit) return [];
+    return leaseMonths({
+      rent: tenantRent(tenant, unit),
+      rule: settings.prorata,
+      entryDate: tenant.entryDate,
+      exitDate: tenant.exitDate,
+      payments: payments.filter((p) => p.tenantId === tenant.id),
+      currentPeriod: periodOf(today),
+    });
+  }, [tenants, units, payments, settings.prorata, today, tenantId]);
 }

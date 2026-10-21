@@ -14,6 +14,7 @@ import { PlanLimitSheet } from '@/components/PlanLimitSheet';
 import { ToastHost } from '@/components/ToastHost';
 import { UpdateBridge } from '@/components/UpdateBridge';
 import { StoreProvider, useStore } from '@/data/store';
+import { ViewPeriodProvider } from '@/data/viewPeriod';
 import { fonts, ThemeProvider, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -66,6 +67,9 @@ function RootStack() {
           <Stack.Screen name="identite" options={{ title: 'Identité et quittances' }} />
           <Stack.Screen name="offre" options={{ title: 'Mon offre' }} />
           <Stack.Screen name="journal" options={{ title: 'Journal d’activité' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+          <Stack.Screen name="declarations" options={{ title: 'Paiements à confirmer' }} />
+          <Stack.Screen name="paiement-direct" options={{ title: 'Paiement direct' }} />
           <Stack.Screen name="bien/nouveau" options={{ title: 'Nouveau bien', presentation: 'modal' }} />
           <Stack.Screen name="bien/[id]/mandant" options={{ title: 'Propriétaire du bien', presentation: 'modal' }} />
           <Stack.Screen name="depense/nouvelle" options={{ title: 'Nouvelle dépense', presentation: 'modal' }} />
@@ -103,7 +107,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <StoreProvider>
-          <Gate fontsReady={loaded || !!error} />
+          <ViewPeriodProvider>
+            <Gate fontsReady={loaded || !!error} />
+          </ViewPeriodProvider>
         </StoreProvider>
       </ThemeProvider>
     </SafeAreaProvider>

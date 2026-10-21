@@ -25,9 +25,11 @@ export function TenantRow({ summary, method, amount, first }: Props) {
   const { tenant, unit, status, dueDate } = summary;
   const sub = method
     ? `${methods[method].short} · ${unit.label}`
-    : status === 'paid'
-      ? `${unit.label} · ${summary.property.name}`
-      : `Échéance ${formatDayMonth(dueDate)} · ${unit.label}`;
+    : tenant.exitDate
+      ? `Parti le ${formatDayMonth(tenant.exitDate)} · ${unit.label}`
+      : status === 'paid'
+        ? `${unit.label} · ${summary.property.name}`
+        : `Échéance ${formatDayMonth(dueDate)} · ${unit.label}`;
 
   return (
     <Pressable
@@ -58,8 +60,8 @@ export function TenantRow({ summary, method, amount, first }: Props) {
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Amount value={amount ?? unit.rent} currency={false} />
-          <StatusBadge status={status} />
+          <Amount value={amount ?? summary.rent} currency={false} />
+          <StatusBadge status={status} arrears={summary.arrears} />
         </View>
       </Pressable>
   );

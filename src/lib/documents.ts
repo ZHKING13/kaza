@@ -229,6 +229,9 @@ type InvoiceArgs = {
     planLabel: string;
     months: number;
     amount: number;
+    /** Offre de bienvenue : réduction en % et prix normal */
+    welcomePercent?: number;
+    fullAmount?: number;
     paidAt: string | null;
     periodStart: string | null;
     periodEnd: string | null;
@@ -251,7 +254,12 @@ export function invoiceHtml({ invoice, customer }: InvoiceArgs) {
       <div class="box"><div class="label">Client</div><b>${esc(customer.name)}</b>${customer.lines.map((l) => `<br>${esc(l)}`).join('')}</div>
     </div>
     <table>
-      <tr><td>Abonnement Kaza, offre ${esc(invoice.planLabel)} (${invoice.months} mois)</td><td class="v">${esc(formatAmount(invoice.amount))}</td></tr>
+      <tr><td>Abonnement Kaza, offre ${esc(invoice.planLabel)} (${invoice.months} mois)</td><td class="v">${esc(formatAmount(invoice.fullAmount ?? invoice.amount))}</td></tr>
+      ${
+        invoice.welcomePercent && invoice.fullAmount
+          ? `<tr><td>Offre de bienvenue (−${invoice.welcomePercent} %)</td><td class="v">− ${esc(formatAmount(invoice.fullAmount - invoice.amount))}</td></tr>`
+          : ''
+      }
       <tr><td>Période</td><td class="v">${esc(period)}</td></tr>
       <tr class="total"><td><b>Total payé</b></td><td class="v">${esc(formatAmount(invoice.amount))}</td></tr>
     </table>

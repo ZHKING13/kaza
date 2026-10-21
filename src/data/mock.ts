@@ -1,6 +1,16 @@
 import { periodOf } from '@/lib/format';
 
-import type { Expense, ExpenseSchedule, Payment, PaymentMethod, Property, Tenant, Unit } from './types';
+import type {
+  Expense,
+  ExpenseSchedule,
+  Payment,
+  PaymentDeclaration,
+  PaymentMethod,
+  PayoutAccount,
+  Property,
+  Tenant,
+  Unit,
+} from './types';
 
 /** Données d'exemple : 3 biens à Abidjan, 19 unités, 17 locataires. */
 
@@ -87,6 +97,39 @@ export function demoTenants(today: Date): Tenant[] {
   });
 }
 
+/** Démo : numéros du bailleur affichés dans l'espace des locataires */
+export const demoPayoutAccounts: PayoutAccount[] = [
+  { method: 'wave', number: '+2250700112233', name: 'Kouassi Brou' },
+  { method: 'orange', number: '+2250787112233' },
+];
+
+/** Démo : deux paiements signalés par des locataires depuis leur espace, à confirmer */
+export function demoDeclarations(today: Date): PaymentDeclaration[] {
+  const at = (days: number, hour = 12) =>
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() + days, hour).toISOString();
+  return [
+    {
+      id: 'd1',
+      tenantId: 't10',
+      amount: 40000,
+      method: 'wave',
+      paidOn: at(0),
+      reference: 'T5Q8-2K91',
+      note: 'Loyer de ce mois, désolé pour le retard',
+      createdAt: at(0, 9),
+    },
+    {
+      id: 'd2',
+      tenantId: 't8',
+      amount: 35000,
+      method: 'cash',
+      paidOn: at(-1),
+      note: 'Remis à votre collecteur samedi',
+      createdAt: at(-1, 18),
+    },
+  ];
+}
+
 function day(base: Date, monthOffset: number, d: number): string {
   return new Date(base.getFullYear(), base.getMonth() + monthOffset, d, 10, 30).toISOString();
 }
@@ -112,6 +155,13 @@ export function buildPayments(today: Date): Payment[] {
 
   // Mois précédents : presque tout le monde a payé
   const methodsCycle: PaymentMethod[] = ['wave', 'orange', 'cash', 'mtn', 'wave', 'moov'];
+  // Baux plus anciens : tout est réglé avant les deux derniers mois (pas d'arriérés fictifs)
+  demoTenants(today).forEach((tn, i) => {
+    if (!tn.entryDate) return;
+    const entry = new Date(tn.entryDate);
+    const from = (entry.getFullYear() - today.getFullYear()) * 12 + entry.getMonth() - today.getMonth();
+    for (let m = from; m <= -3; m++) add(tn.id, m, 3 + (i % 6), methodsCycle[(i + m + 60) % methodsCycle.length]);
+  });
   tenants.forEach((tn, i) => {
     add(tn.id, -2, 3 + (i % 6), methodsCycle[i % methodsCycle.length]);
     if (tn.id !== 't3') add(tn.id, -1, 2 + (i % 7), methodsCycle[(i + 1) % methodsCycle.length]);

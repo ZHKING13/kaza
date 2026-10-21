@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { DateField } from '@/components/DateField';
@@ -50,6 +51,7 @@ export default function ContratLocataire() {
   const [exitEdited, setExitEdited] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState<string>();
 
@@ -150,7 +152,7 @@ export default function ContratLocataire() {
                 icon={Undo2}
                 variant="ghost"
                 disabled={busy}
-                onPress={() => run(() => withdrawNotice(tenant.id), 'Préavis retiré.')}
+                onPress={() => setWithdrawing(true)}
               />
             </Card>
           ) : (
@@ -218,6 +220,14 @@ export default function ContratLocataire() {
         ) : null}
         <FormError message={error} />
       </ScrollView>
+      <ConfirmSheet
+        visible={withdrawing}
+        title="Retirer le préavis ?"
+        message={`Le départ prévu de ${tenant.firstName} ${tenant.lastName} est retiré : le bail continue comme avant.`}
+        confirmLabel="Retirer le préavis"
+        onClose={() => setWithdrawing(false)}
+        onConfirm={() => run(() => withdrawNotice(tenant.id), 'Préavis retiré.')}
+      />
     </KeyboardAvoidingView>
   );
 }

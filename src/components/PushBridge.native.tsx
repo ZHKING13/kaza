@@ -1,10 +1,9 @@
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { useStore } from '@/data/store';
-import { errorMessage } from '@/lib/api';
+import { openNotificationTarget, refreshUnread } from '@/lib/notifications';
 import { type PushData, pushSupported, registerForPush } from '@/lib/push';
 import { showToast } from '@/lib/toast';
 
@@ -30,32 +29,7 @@ export function PushBridge() {
   useEffect(() => {
     if (Platform.OS === 'web' || !pushSupported()) return;
 
-    const open = async (data: PushData) => {
-      const { organizationId: active, organizations: mine, switchOrganization: change } = current.current;
-      if (data.organizationId && data.organizationId !== active) {
-        if (!mine.some((o) => o.id === data.organizationId)) return;
-        try {
-          await change(data.organizationId);
-        } catch (error) {
-          showToast(errorMessage(error), 'error');
-          return;
-        }
-      }
-      switch (data.screen) {
-        case 'tenant':
-          if (data.leaseId) router.push({ pathname: '/locataire/[id]', params: { id: data.leaseId } });
-          break;
-        case 'late':
-          router.navigate({ pathname: '/locataires', params: { filtre: 'late' } });
-          break;
-        case 'subscription':
-          router.push('/offre');
-          break;
-        case 'team':
-          router.push('/equipe');
-          break;
-      }
-    };
+    const open = (data: PushData) => openNotificationTarget(data, current.current);
 
     let handled: string | null = null;
     const respond = (response: Notifications.NotificationResponse | null) => {
@@ -69,8 +43,9 @@ export function PushBridge() {
     const received = Notifications.addNotificationReceivedListener((notification) => {
       const { title, body } = notification.request.content;
       showToast(title && body ? `${title} : ${body}` : (body ?? title ?? ''), 'info');
-      // Les chiffres de l'écran suivent (paiement reçu, nouveau membre…)
+      // Les chiffres de l'écran suivent (paiement reçu, nouveau membre…), et la pastille de la cloche
       current.current.refresh().catch(() => {});
+      void refreshUnread();
     });
     return () => {
       clearTimeout(coldStart);

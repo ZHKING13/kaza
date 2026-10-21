@@ -11,7 +11,9 @@ import type {
   ExpenseMethod,
   ExpenseSchedule,
   Payment,
+  PaymentDeclaration,
   PaymentMethod,
+  PayoutMethod,
   Property,
   PropertyType,
   Settlement,
@@ -61,6 +63,8 @@ export type ApiOrganization = {
   leases?: LeaseSettings;
   /** Liens de paiement mobile money disponibles (agrégateur configuré sur le serveur) */
   onlinePaymentsEnabled?: boolean;
+  /** Numéros où les locataires paient directement (espace locataire) */
+  payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
   /** Offre en vigueur (essai, payée, grâce, mode limité) */
   subscription?: OrganizationSubscription;
   role: Role;
@@ -91,6 +95,8 @@ export type SubscriptionInvoice = {
   plan: PlanId;
   months: number;
   amount: number;
+  /** Offre de bienvenue : réduction en % (0 sans) */
+  welcomePercent: number;
   currency: string;
   status: 'pending' | 'paid' | 'failed' | 'expired';
   number: string | null;
@@ -112,8 +118,22 @@ export type SubscriptionDetail = {
   limits: PlanLimits;
   usage: { units: number; members: number; messagesThisMonth: number };
   billingAvailable: boolean;
-  catalog: { id: PlanId; label: string; monthlyPrice: number; prices: { months: number; amount: number }[]; limits: PlanLimits }[];
+  /** Offre de bienvenue du propriétaire, tant qu'elle est ouverte */
+  welcome: { endsAt: string; daysLeft: number; discounts: { months: number; percent: number }[] } | null;
+  /** `amount` : prix à payer (offre de bienvenue déduite), `fullAmount` : prix normal */
+  catalog: {
+    id: PlanId;
+    label: string;
+    monthlyPrice: number;
+    prices: { months: number; amount: number; fullAmount: number; percent: number }[];
+    limits: PlanLimits;
+  }[];
   invoices: SubscriptionInvoice[];
+};
+
+export type AccountDeletionPreview = {
+  owned: { id: string; name: string; units: number; tenants: number; otherMembers: number }[];
+  memberOf: { id: string; name: string }[];
 };
 
 /** Membre d'un espace */
@@ -223,7 +243,34 @@ type ApiLease = {
   depositMonths: number;
   advanceMonths: number;
   settlement: ApiSettlement | null;
+  /** Lien de l'espace locataire ; null après le départ */
+  tenantLink?: string | null;
 };
+
+type ApiDeclaration = {
+  id: string;
+  leaseId: string;
+  amount: number;
+  method: PaymentMethod;
+  paidOn: string;
+  reference: string | null;
+  note: string | null;
+  proofUrl: string | null;
+  status: 'pending' | 'confirmed' | 'rejected';
+  createdAt: string;
+};
+
+export const toDeclaration = (d: ApiDeclaration): PaymentDeclaration => ({
+  id: d.id,
+  tenantId: d.leaseId,
+  amount: d.amount,
+  method: d.method,
+  paidOn: localNoon(d.paidOn),
+  reference: d.reference ?? undefined,
+  note: d.note ?? undefined,
+  proofUrl: d.proofUrl ?? undefined,
+  createdAt: d.createdAt,
+});
 
 type ApiSettlement = {
   id: string;
@@ -266,6 +313,7 @@ type ApiSnapshot = {
   payments: ApiPayment[];
   expenses?: ApiExpense[];
   expenseSchedules?: ApiExpenseSchedule[];
+  paymentDeclarations?: ApiDeclaration[];
 };
 
 export type ApiExpense = {
@@ -331,6 +379,7 @@ export type RemoteData = {
   payments: Payment[];
   expenses: Expense[];
   expenseSchedules: ExpenseSchedule[];
+  declarations: PaymentDeclaration[];
 };
 
 /** Les dates calendaires du serveur sont lues à midi heure locale (même jour partout). */
@@ -374,6 +423,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
         }
       : undefined,
     settlement: l.settlement ? toSettlement(l.settlement) : undefined,
+    portalUrl: l.tenantLink ?? undefined,
     advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
   }));
   // Loyer du mois en cours des baux actifs, par unité
@@ -404,6 +454,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
     payments,
     expenses: (s.expenses ?? []).map(toExpense),
     expenseSchedules: (s.expenseSchedules ?? []).map(toExpenseSchedule),
+    declarations: (s.paymentDeclarations ?? []).map(toDeclaration),
   };
 }
 
@@ -487,6 +538,18 @@ export type ExpenseUpdateBody = Partial<{
 
 export type LandlordBody = { landlordName: string | null; landlordPhone: string | null; commissionBps: number | null };
 
+/** Encaissement réparti sur plusieurs mois (identifiants des paiements choisis par le téléphone, dans l'ordre des mois) */
+export type AllocationBody = {
+  ids: string[];
+  leaseId: string;
+  amount: number;
+  method: PaymentMethod;
+  startPeriod?: string;
+  receivedAt: string;
+  /** Paiement signalé par le locataire que cet encaissement confirme */
+  declarationId?: string;
+};
+
 export type PaymentBody = {
   id: string;
   leaseId: string;
@@ -510,6 +573,10 @@ function imagePath(orgId: string, target: ImageTarget, id?: string): string {
 
 export const remote = {
   me: () => api.get<{ user: ApiUser; organizations: ApiOrganization[] }>('/user/me'),
+  /** Ce que la suppression du compte efface : espaces possédés (avec leurs données) et espaces rejoints */
+  deletionPreview: () => api.get<AccountDeletionPreview>('/user/me/deletion'),
+  /** Supprime le compte (définitif) */
+  deleteAccount: () => api.post<void>('/user/me/delete', { confirmation: 'SUPPRIMER' }),
 
   updateProfile: (firstName: string, lastName: string) => api.patch<ApiUser>('/user/me', { firstName, lastName }),
 
@@ -518,8 +585,22 @@ export const remote = {
 
   updateOrganization: (
     orgId: string,
-    body: { prorataRule?: ProrataRule; name?: string; messaging?: Partial<MessagingSettings>; leases?: Partial<LeaseSettings> },
+    body: {
+      prorataRule?: ProrataRule;
+      name?: string;
+      messaging?: Partial<MessagingSettings>;
+      leases?: Partial<LeaseSettings>;
+      payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
+    },
   ) => api.patch<ApiOrganization>(`/user/organizations/${orgId}`, body),
+
+  /** Refuse un paiement signalé par un locataire (le motif s'affiche dans son espace) */
+  rejectDeclaration: (orgId: string, declarationId: string, reason: string) =>
+    api.post<ApiDeclaration>(`/user/organizations/${orgId}/payment-declarations/${declarationId}/reject`, { reason }),
+
+  /** Nouveau lien de l'espace locataire ; l'ancien ne fonctionne plus */
+  regenerateTenantLink: (orgId: string, leaseId: string) =>
+    api.post<{ leaseId: string; url: string }>(`/user/organizations/${orgId}/leases/${leaseId}/tenant-link`, {}),
 
   subscription: (orgId: string) => api.get<SubscriptionDetail>(`/user/organizations/${orgId}/subscription`),
 
@@ -617,6 +698,11 @@ export const remote = {
     api
       .post<{ lease: { id: string }; payments: ApiPayment[] }>(`/user/organizations/${orgId}/leases`, body, { idempotencyKey })
       .then((res) => ({ leaseId: res.lease.id, payments: res.payments.map(toPayment) })),
+
+  allocatePayment: (orgId: string, body: AllocationBody, idempotencyKey: string) =>
+    api
+      .post<{ payments: ApiPayment[] }>(`/user/organizations/${orgId}/payments/allocations`, body, { idempotencyKey })
+      .then((res) => res.payments.map(toPayment)),
 
   createPayment: (orgId: string, body: PaymentBody, idempotencyKey: string) =>
     api.post<ApiPayment>(`/user/organizations/${orgId}/payments`, body, { idempotencyKey }).then(toPayment),
