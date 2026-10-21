@@ -27,7 +27,7 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
   starter: {
     label: 'Bailleur',
     monthlyPrice: 3000,
-    pitch: 'Le bailleur seul : relances WhatsApp et liens de paiement.',
+    pitch: 'Le bailleur seul : Kaza relance et envoie vos quittances à votre place.',
     limits: { units: 10, members: 1, messagesPerMonth: 60, onlinePayments: true, branding: false, activityLog: false, exports: true, landlordReports: false },
   },
   pro: {

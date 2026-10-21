@@ -32,8 +32,7 @@ ENCAISSEZ EN QUELQUES SECONDES
 QUITTANCES ET RELANCES SUR WHATSAPP
 • Quittance PDF à vos couleurs (logo, cachet, signature)
 • Relance en un geste depuis votre WhatsApp, ou envoyée automatiquement par Kaza
-• Lien de paiement mobile money : le locataire paie, le loyer s'enregistre tout seul
-• Espace locataire : chaque locataire voit ce qui reste à payer et ses quittances, vous paie directement sur votre Wave ou Mobile Money et vous signale son paiement, sans application
+• Espace locataire : chaque locataire voit ce qui reste à payer et ses quittances, vous paie directement sur votre Wave ou Mobile Money, sans frais, et vous signale son paiement, sans application
 
 TOUS VOS BIENS AU MÊME ENDROIT
 • Cours communes, immeubles, villas, magasins, avec leurs unités
@@ -54,7 +53,7 @@ Tout est gardé sur votre téléphone. Encaissez, ajoutez un locataire ou une d�
 
 OFFRES
 • Gratuit : jusqu'à 3 logements, 5 messages envoyés par Kaza par mois
-• Bailleur, Pro et Agence : plus de logements, liens de paiement, équipe, quittances à vos couleurs
+• Bailleur, Pro et Agence : plus de logements, relances et quittances envoyées automatiquement par Kaza, équipe, quittances à vos couleurs, aide prioritaire
 • Offre de bienvenue : -25 % sur 3 mois ou -20 % sur 12 mois pendant les 30 jours qui suivent votre inscription
 • Paiement de l'abonnement par mobile money
 

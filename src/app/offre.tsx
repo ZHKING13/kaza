@@ -14,20 +14,27 @@ import { remote, type SubscriptionDetail } from '@/data/remote';
 import { usePermissions, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { invoiceHtml } from '@/lib/documents';
-import { formatAmount, formatDate } from '@/lib/format';
+import { formatAmount, formatDate, formatNumber } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
 const monthLabels: Record<BillingMonths, string> = { 1: '1 mois', 3: '3 mois', 12: '12 mois · 2 offerts' };
 
-function features(id: PlanId): string[] {
+/** `onlinePayments` : liens de paiement disponibles sur le serveur (agrégateur branché), sinon non affichés */
+function features(id: PlanId, onlinePayments: boolean): string[] {
   const l = plans[id].limits;
+  const paid = id !== 'free';
   return [
     `${l.units === null ? 'Logements illimités' : `Jusqu’à ${l.units} logements`}`,
     l.members === null ? 'Équipe illimitée' : l.members === 1 ? 'Vous seul' : `Vous et ${l.members - 1} membres (gérant, collecteur)`,
-    l.messagesPerMonth > 0 ? `${l.messagesPerMonth} messages WhatsApp envoyés par Kaza / mois` : 'Relances depuis votre WhatsApp',
-    ...(l.onlinePayments ? ['Liens de paiement Wave, Orange, MTN, Moov'] : []),
+    paid
+      ? `Relances et quittances envoyées automatiquement par Kaza (${formatNumber(l.messagesPerMonth)} / mois)`
+      : `Relances depuis votre WhatsApp, ${l.messagesPerMonth} envois par Kaza pour essayer`,
+    'Espace locataire et paiement direct, sans frais',
+    ...(l.exports ? ['Export Excel'] : []),
+    ...(onlinePayments && l.onlinePayments ? ['Liens de paiement en ligne'] : []),
     ...(l.branding ? ['Quittances à vos couleurs (logo, cachet)'] : []),
     ...(l.activityLog ? ['Journal d’activité'] : []),
+    ...(paid ? ['Aide prioritaire sur WhatsApp'] : []),
   ];
 }
 
@@ -56,7 +63,7 @@ function Usage({ label, used, limit }: { label: string; used: number; limit: num
 /** Offre de l'espace : où l'on en est, ce que chaque offre permet, paiement par mobile money, factures. */
 export default function OffreScreen() {
   const { c, status } = useTheme();
-  const { organizationId, identity, organizations, pendingSubscription, startSubscriptionPayment } = useStore();
+  const { organizationId, identity, organizations, pendingSubscription, startSubscriptionPayment, settings } = useStore();
   const { isOwner } = usePermissions();
   const [detail, setDetail] = useState<SubscriptionDetail | null>(null);
   const [months, setMonths] = useState<BillingMonths>(12);
@@ -139,7 +146,7 @@ export default function OffreScreen() {
       : detail.status === 'grace'
         ? 'Vos fonctions restent ouvertes pendant 7 jours. Ensuite, l’espace passe en offre gratuite (rien n’est effacé).'
         : detail.status === 'free'
-          ? 'Jusqu’à 3 logements, 5 messages envoyés par Kaza par mois, quittances et relances depuis votre WhatsApp. Plus de logements, l’équipe, les liens de paiement et vos couleurs sur les quittances : choisissez une offre.'
+          ? 'Jusqu’à 3 logements, quittances et relances depuis votre WhatsApp, espace locataire. Pour que Kaza relance et envoie vos quittances à votre place, plus de logements, l’équipe et vos couleurs sur les quittances : choisissez une offre.'
           : detail.status === 'expired'
           ? 'Vous gardez l’accès à tout pour consulter, encaisser et imprimer vos quittances. Ajouter des logements, l’équipe et les envois par Kaza demandent une offre payante.'
           : 'Vous pouvez prolonger ou changer d’offre à tout moment : les jours déjà payés sont gardés.';
@@ -236,7 +243,7 @@ export default function OffreScreen() {
             <Text variant="small" tone="muted">
               {plans[id].pitch}
             </Text>
-            {features(id).map((f) => (
+            {features(id, !!settings.onlinePayments).map((f) => (
               <View key={f} style={{ flexDirection: 'row', gap: space.xs, alignItems: 'flex-start' }}>
                 <Check size={16} color={c.primary} style={{ marginTop: 3 }} />
                 <Text variant="small" style={{ flex: 1 }}>
