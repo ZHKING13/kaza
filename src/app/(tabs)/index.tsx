@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, CircleAlert, DoorOpen, Hand, Receipt, Send } from 'lucide-react-native';
+import { Bell, CalendarClock, ChevronRight, CircleAlert, DoorOpen, Hand, Receipt, Send } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, View } from 'react-native';
@@ -47,6 +47,8 @@ export default function Accueil() {
   const totals = useMonthTotals(shown);
   const monthReport = useReport(shown, shown);
   const past = shown < period;
+  // Mois à venir : rien n'y est encore dû, seules les avances comptent
+  const ahead = shown > period;
   const pct = totals.expected ? Math.round((totals.collected / totals.expected) * 100) : 0;
   const recent = payments.slice(0, 4);
 
@@ -112,7 +114,7 @@ export default function Accueil() {
             <View style={{ backgroundColor: c.primary, borderRadius: radius.lg, padding: space.md, gap: space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text variant="small" color={c.onPrimary} style={{ opacity: 0.9 }}>
-                  Encaissé en {formatPeriod(shown).split(' ')[0]}
+                  {ahead ? 'Payé d’avance pour' : 'Encaissé en'} {formatPeriod(shown).split(' ')[0]}
                 </Text>
                 <KazaMark size={22} color={c.onPrimary} />
               </View>
@@ -127,7 +129,7 @@ export default function Accueil() {
                   {pct} % de {formatNumber(totals.expected)}
                 </Text>
                 <Text variant="caption" color={c.onPrimary}>
-                  {totals.paidCount} / {totals.tenantCount} locataire{totals.tenantCount > 1 ? 's' : ''} à jour
+                  {totals.paidCount} / {totals.tenantCount} locataire{totals.tenantCount > 1 ? 's' : ''} {ahead ? 'd’avance' : 'à jour'}
                 </Text>
               </View>
             </View>
@@ -135,16 +137,16 @@ export default function Accueil() {
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               <Card style={{ flex: 1, gap: 4 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <CircleAlert size={16} color={status.late.fg} />
+                  {ahead ? <CalendarClock size={16} color={c.textMuted} /> : <CircleAlert size={16} color={status.late.fg} />}
                   <Text variant="small" tone="muted">
-                    Impayés
+                    {ahead ? 'À recevoir' : 'Impayés'}
                   </Text>
                 </View>
                 <Amount
                   value={totals.outstanding}
                   currency={false}
                   variant="h2"
-                  color={status.late.fg}
+                  color={ahead ? c.text : status.late.fg}
                   style={{ fontVariant: ['tabular-nums'] }}
                 />
               </Card>
@@ -213,7 +215,7 @@ export default function Accueil() {
           </Pressable>
         ) : null}
 
-        {totals.lateCount > 0 ? (
+        {totals.lateCount > 0 && !ahead ? (
           <View
             style={{
               flexDirection: 'row',

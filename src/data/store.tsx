@@ -1716,7 +1716,8 @@ export function useTenantSummaries(forPeriod?: string): TenantSummary[] {
     () =>
       tenants
         .filter((tenant) => {
-          if (period >= current) return !tenant.exitDate;
+          // Mois à venir : sans les locataires partis, ni ceux dont le préavis se termine avant
+          if (period >= current) return !tenant.exitDate && !(tenant.notice && periodOf(new Date(tenant.notice.exitDate)) < period);
           const entered = !tenant.entryDate || periodOf(new Date(tenant.entryDate)) <= period;
           const stayed = !tenant.exitDate || periodOf(new Date(tenant.exitDate)) >= period;
           return entered && stayed;
@@ -1730,9 +1731,14 @@ export function useTenantSummaries(forPeriod?: string): TenantSummary[] {
           const entry = tenant.entryDate ? new Date(tenant.entryDate) : undefined;
           // Entrée dans un mois futur : rien n'est attendu ce mois-là
           const notStarted = !!entry && periodOf(entry) > period;
-          const [y, m] = period.split('-').map(Number);
-          let dueDate = new Date(y, m - 1, Math.min(tenant.dueDay, new Date(y, m, 0).getDate()));
-          if (entry && entry > dueDate) dueDate = entry;
+          const dueDateIn = (p: string) => {
+            const [y, m] = p.split('-').map(Number);
+            const d = new Date(y, m - 1, Math.min(tenant.dueDay, new Date(y, m, 0).getDate()));
+            return entry && entry > d ? entry : d;
+          };
+          const dueDate = dueDateIn(period);
+          // En retard le lendemain de l'échéance (même règle que periodRentStatus du serveur)
+          const overdue = (p: string) => p < current || (p === current && dayKey(today) > dayKey(dueDateIn(current)));
           const schedule = tenantRent(tenant, unit);
           const due = rentForPeriod(schedule, period, settings.prorata, tenant.entryDate, tenant.exitDate).amount;
           const status: TenantSummary['status'] = notStarted
@@ -1741,14 +1747,9 @@ export function useTenantSummaries(forPeriod?: string): TenantSummary[] {
               ? 'paid'
               : paid > 0
                 ? 'partial'
-                : period < current
+                : overdue(period)
                   ? 'late'
-                  : period > current
-                    ? 'upcoming'
-                    : // En retard le lendemain de l'échéance (même règle que periodRentStatus du serveur)
-                      dayKey(today) > dayKey(dueDate)
-                      ? 'late'
-                      : 'upcoming';
+                  : 'upcoming';
           const arrears = leaseMonths({
             rent: schedule,
             rule: settings.prorata,
@@ -1757,7 +1758,8 @@ export function useTenantSummaries(forPeriod?: string): TenantSummary[] {
             payments: payments.filter((p) => p.tenantId === tenant.id),
             currentPeriod: current,
           })
-            .filter((m) => m.period < period)
+            // Mois avant celui affiché et déjà échus : vu depuis un mois futur, les mois à venir ne sont pas des arriérés
+            .filter((m) => m.period < period && overdue(m.period))
             .reduce((sum, m) => sum + m.remaining, 0);
           return { tenant, unit, property, status, paid, due, dueDate: dueDate.toISOString(), rent: rentAt(schedule, period), arrears };
         }),
