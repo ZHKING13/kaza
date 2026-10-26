@@ -91,7 +91,8 @@ Fonctionnement en mode serveur :
   visibles par toute l'équipe et sur un autre téléphone ; « Changer la photo » sur la fiche du bien (propriétaire,
   gérant). Les photos prises avant cette version sont envoyées à la prochaine connexion.
 - **Offres** (étape 10) : Gratuit (3 logements), Bailleur (3 000 FCFA/mois, 10 logements, messages Kaza, liens de
-  paiement), Pro (8 000, 40 logements, équipe de 3, quittances à vos couleurs, journal), Agence (25 000, 150 logements,
+  paiement), Famille (5 000, 10 logements, vous et un proche ou un collecteur, journal), Pro (8 000, 40 logements,
+  équipe de 3, quittances à vos couleurs, journal), Agence (25 000, 150 logements,
   équipe illimitée) ; 12 mois au prix de 10. Essai Pro de 30 jours à la création de l'espace, 7 jours de grâce après
   l'échéance, puis offre gratuite sans rien effacer (consulter, encaisser, imprimer restent possibles). Plus › Mon offre :
   usage (logements, équipe, messages du mois), choix de l'offre et de la durée, paiement par mobile money (page de

@@ -1,8 +1,8 @@
 /**
- * Offres de Kaza : mêmes valeurs que `plans` de @zhking13/kaza-domain 0.7.0 (le serveur applique les
+ * Offres de Kaza : mêmes valeurs que `plans` de @zhking13/kaza-domain 0.9.0 (le serveur applique les
  * limites ; l'application les affiche).
  */
-export type PlanId = 'free' | 'starter' | 'pro' | 'agency';
+export type PlanId = 'free' | 'starter' | 'family' | 'pro' | 'agency';
 
 export type PlanLimits = {
   units: number | null;
@@ -30,6 +30,12 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
     pitch: 'Le bailleur seul : Kaza relance et envoie vos quittances à votre place.',
     limits: { units: 10, members: 1, messagesPerMonth: 60, onlinePayments: true, branding: false, activityLog: false, exports: true, landlordReports: false },
   },
+  family: {
+    label: 'Famille',
+    monthlyPrice: 5000,
+    pitch: 'Un proche ou un collecteur encaisse sur place, vous suivez tout de loin.',
+    limits: { units: 10, members: 2, messagesPerMonth: 60, onlinePayments: true, branding: false, activityLog: true, exports: true, landlordReports: false },
+  },
   pro: {
     label: 'Pro',
     monthlyPrice: 8000,
@@ -44,7 +50,7 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
   },
 };
 
-export const paidPlans: PlanId[] = ['starter', 'pro', 'agency'];
+export const paidPlans: PlanId[] = ['starter', 'family', 'pro', 'agency'];
 export const billingMonths = [1, 3, 12] as const;
 export type BillingMonths = (typeof billingMonths)[number];
 

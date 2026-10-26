@@ -25,7 +25,13 @@ function features(id: PlanId, onlinePayments: boolean): string[] {
   const paid = id !== 'free';
   return [
     `${l.units === null ? 'Logements illimités' : `Jusqu’à ${l.units} logements`}`,
-    l.members === null ? 'Équipe illimitée' : l.members === 1 ? 'Vous seul' : `Vous et ${l.members - 1} membres (gérant, collecteur)`,
+    l.members === null
+      ? 'Équipe illimitée'
+      : l.members === 1
+        ? 'Vous seul'
+        : l.members === 2
+          ? 'Vous et 1 membre (proche ou collecteur)'
+          : `Vous et ${l.members - 1} membres (gérant, collecteur)`,
     paid
       ? `Relances et quittances envoyées automatiquement par Kaza (${formatNumber(l.messagesPerMonth)} / mois)`
       : `Relances depuis votre WhatsApp, ${l.messagesPerMonth} envois par Kaza pour essayer`,
