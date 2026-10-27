@@ -177,7 +177,7 @@ export default function Plus() {
           label="Équipe et gérants"
           hint={remote ? roleLabels[role] : undefined}
           first
-          onPress={remote ? () => router.push('/equipe') : undefined}
+          onPress={remote || mode === 'demo' ? () => router.push('/equipe') : undefined}
         />
         {remote && can('activity.view') ? <Row icon={History} label="Journal d’activité" onPress={() => router.push('/journal')} /> : null}
         <Row

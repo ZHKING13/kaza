@@ -12,6 +12,7 @@ import { FormError } from '@/components/FormError';
 import { PhoneField } from '@/components/PhoneField';
 import { Text } from '@/components/Text';
 import { countries, type Country } from '@/data/countries';
+import { demoTeam } from '@/data/mock';
 import {
   memberPermissions,
   type Permission,
@@ -43,10 +44,14 @@ const sameList = (a: readonly string[], b: readonly string[]) => a.join() === b.
 
 const memberName = (m: TeamMember) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || (m.phone ? formatPhone(m.phone) : 'Membre');
 
-/** Équipe de l'espace ouvert : membres, invitations en attente, invitation par numéro (propriétaire). */
+/**
+ * Équipe de l'espace ouvert : membres, invitations en attente, invitation par numéro (propriétaire). En démo,
+ * une équipe d'exemple modifiable sur le téléphone, sans serveur.
+ */
 export default function Equipe() {
   const { c } = useTheme();
-  const { organizationId, organizations, leaveOrganization } = useStore();
+  const { organizationId, organizations, leaveOrganization, mode } = useStore();
+  const demo = mode === 'demo';
   const { isOwner, can } = usePermissions();
   const canAudit = can('activity.view');
   // Cocher chaque permission : offres Famille et Agence ; sinon modèles seulement
@@ -61,6 +66,10 @@ export default function Equipe() {
   const [ask, setAsk] = useState<{ title: string; message: string; label: string; run: () => Promise<unknown> } | null>(null);
 
   const load = useCallback(async () => {
+    if (demo) {
+      setMembers((list) => list ?? demoTeam);
+      return;
+    }
     if (!organizationId) return;
     try {
       const [m, i] = await Promise.all([
@@ -73,7 +82,7 @@ export default function Equipe() {
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, [organizationId, canAudit]);
+  }, [organizationId, canAudit, demo]);
 
   useEffect(() => {
     void load();
@@ -90,6 +99,26 @@ export default function Equipe() {
   };
 
   const me = members?.find((m) => m.isMe);
+
+  /** Nouveau modèle (ses permissions) ou cases cochées d'un membre ; en démo, sur le téléphone seulement */
+  const update = async (userId: string, body: { role?: PermissionPreset; permissions?: Permission[] }) => {
+    if (!demo) {
+      await remote.updateMember(organizationId!, userId, body);
+      return;
+    }
+    setMembers(
+      (list) =>
+        list?.map((m) =>
+          m.userId !== userId
+            ? m
+            : {
+                ...m,
+                role: body.role ?? m.role,
+                permissions: body.permissions ?? (body.role ? rolePresets[body.role] : m.permissions),
+              },
+        ) ?? null,
+    );
+  };
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.md, gap: space.md, paddingBottom: space.xxl }}>
@@ -143,7 +172,7 @@ export default function Equipe() {
                           key={r}
                           label={roleLabels[r]}
                           selected={m.role === r}
-                          onPress={() => act(() => remote.updateMember(organizationId!, m.userId, { role: r }))}
+                          onPress={() => act(() => update(m.userId, { role: r }))}
                         />
                       ))}
                     </View>
@@ -151,7 +180,7 @@ export default function Equipe() {
                       key={(m.permissions ?? []).join()}
                       member={m}
                       locked={!customizable}
-                      onSave={(list) => act(() => remote.updateMember(organizationId!, m.userId, { permissions: list }))}
+                      onSave={(list) => act(() => update(m.userId, { permissions: list }))}
                     />
                     <Button
                       label="Retirer de l’espace"
@@ -163,6 +192,10 @@ export default function Equipe() {
                           message: 'Cette personne n’aura plus accès aux biens et locataires de l’espace. Vous pourrez l’inviter de nouveau.',
                           label: 'Retirer de l’espace',
                           run: async () => {
+                            if (demo) {
+                              setMembers((list) => list?.filter((x) => x.userId !== m.userId) ?? null);
+                              return;
+                            }
                             await remote.removeMember(organizationId!, m.userId);
                             await load();
                           },
@@ -224,7 +257,9 @@ export default function Equipe() {
         </>
       ) : null}
 
-      {isOwner && organizationId ? <InviteForm organizationId={organizationId} customizable={customizable} onSent={load} /> : null}
+      {isOwner && (organizationId || demo) ? (
+        <InviteForm organizationId={organizationId} demo={demo} customizable={customizable} onSent={load} />
+      ) : null}
 
       <FormError message={error} />
 
@@ -345,10 +380,12 @@ function PermissionChecklist({
 
 function InviteForm({
   organizationId,
+  demo,
   customizable,
   onSent,
 }: {
-  organizationId: string;
+  organizationId: string | null;
+  demo: boolean;
   customizable: boolean;
   onSent: () => void;
 }) {
@@ -374,6 +411,10 @@ function InviteForm({
     try {
       const phone = `+${country.dial}${digits}`;
       const ticked = custom && !sameList(custom, rolePresets[role]) ? custom : undefined;
+      if (demo || !organizationId) {
+        setSent(`Démo : avec votre compte, l’invitation partirait sur le WhatsApp du ${formatPhone(phone)}.`);
+        return;
+      }
       await remote.invite(organizationId, phone, role, ticked);
       setSent(`Invitation envoyée sur le WhatsApp du ${formatPhone(phone)}. Elle est valable 7 jours.`);
       setNational('');

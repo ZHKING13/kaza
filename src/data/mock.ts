@@ -1,5 +1,7 @@
 import { periodOf } from '@/lib/format';
 
+import type { TeamMember } from './remote';
+
 import type {
   Expense,
   ExpenseSchedule,
@@ -96,6 +98,34 @@ export function demoTenants(today: Date): Tenant[] {
     return x;
   });
 }
+
+/** Démo : l'équipe du bailleur (lui, son frère qui encaisse sur place, une gérante) */
+export const demoTeam: TeamMember[] = [
+  { userId: 'u1', firstName: 'Kouassi', lastName: 'Brou', phone: '+2250700112233', role: 'owner', joinedAt: '2026-01-05T10:00:00Z', isMe: true },
+  {
+    userId: 'u2',
+    firstName: 'Koffi',
+    lastName: 'Brou',
+    phone: '+2250707445566',
+    role: 'collector',
+    // Collecteur, plus le droit de noter une dépense
+    permissions: ['payments.record', 'messages.send', 'expenses.manage', 'reports.view'],
+    propertyIds: null,
+    joinedAt: '2026-01-06T10:00:00Z',
+    isMe: false,
+  },
+  {
+    userId: 'u3',
+    firstName: 'Aminata',
+    lastName: 'Koné',
+    phone: '+2250505778899',
+    role: 'viewer',
+    permissions: ['reports.view'],
+    propertyIds: null,
+    joinedAt: '2026-02-12T10:00:00Z',
+    isMe: false,
+  },
+];
 
 /** Démo : numéros du bailleur affichés dans l'espace des locataires */
 export const demoPayoutAccounts: PayoutAccount[] = [
