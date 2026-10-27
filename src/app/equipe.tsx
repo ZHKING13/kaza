@@ -186,6 +186,7 @@ export default function Equipe() {
                     <MemberPermissions
                       key={(m.permissions ?? []).join()}
                       member={m}
+                      scoped={!!m.propertyIds?.length}
                       locked={!customizable}
                       onSave={(list) => act(() => update(m.userId, { permissions: list }))}
                     />
@@ -272,7 +273,14 @@ export default function Equipe() {
       ) : null}
 
       {isOwner && (organizationId || demo) ? (
-        <InviteForm organizationId={organizationId} demo={demo} customizable={customizable} onSent={load} />
+        <InviteForm
+          organizationId={organizationId}
+          demo={demo}
+          customizable={customizable}
+          propertyScope={propertyScope}
+          properties={properties}
+          onSent={load}
+        />
       ) : null}
 
       <FormError message={error} />
@@ -309,10 +317,12 @@ export default function Equipe() {
 /** Cases cochées d'un membre, enregistrées d'un coup */
 function MemberPermissions({
   member,
+  scoped,
   locked,
   onSave,
 }: {
   member: TeamMember;
+  scoped: boolean;
   locked: boolean;
   onSave: (list: Permission[]) => void;
 }) {
@@ -321,16 +331,13 @@ function MemberPermissions({
   const changed = !sameList(list, current);
   return (
     <View style={{ gap: space.xs }}>
-      <PermissionChecklist value={list} onChange={setList} locked={locked} />
+      <PermissionChecklist value={list} onChange={setList} locked={locked} scoped={scoped} />
       {changed ? <Button label="Enregistrer ses permissions" compact onPress={() => onSave(list)} /> : null}
     </View>
   );
 }
 
-/**
- * Biens confiés à un membre (offre Agence) : tous, ou ceux qu'on choisit. Le serveur ne lui envoie que ceux-là ;
- * une liste vide veut dire tous.
- */
+/** Biens confiés à un membre, enregistrés d'un coup ; une liste vide veut dire tous */
 function MemberProperties({
   member,
   properties,
@@ -342,13 +349,38 @@ function MemberProperties({
   locked: boolean;
   onSave: (ids: string[]) => void;
 }) {
-  const { c } = useTheme();
   const current = member.propertyIds ?? [];
   const [chosen, setChosen] = useState<string[] | null>(current.length ? current : null);
   const value = chosen ?? [];
-  const changed = !sameList(value, current);
+  return (
+    <View style={{ gap: space.xs }}>
+      <PropertyPicker value={chosen} onChange={setChosen} properties={properties} locked={locked} />
+      {!sameList(value, current) && (chosen === null || value.length > 0) ? (
+        <Button label="Enregistrer ses biens" compact onPress={() => onSave(value)} />
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Tous les biens (null) ou ceux qu'on coche (offre Agence). Le serveur n'envoie au membre que ceux-là, et ne lui
+ * laisse ni créer de bien ni voir le journal.
+ */
+function PropertyPicker({
+  value,
+  onChange,
+  properties,
+  locked,
+}: {
+  value: string[] | null;
+  onChange: (ids: string[] | null) => void;
+  properties: { id: string; name: string }[];
+  locked: boolean;
+}) {
+  const { c } = useTheme();
+  const list = value ?? [];
   const toggle = (id: string) =>
-    setChosen(properties.map((p) => p.id).filter((x) => (x === id ? !value.includes(x) : value.includes(x))));
+    onChange(properties.map((p) => p.id).filter((x) => (x === id ? !list.includes(x) : list.includes(x))));
   return (
     <View style={{ gap: space.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
@@ -358,12 +390,12 @@ function MemberProperties({
         </Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, opacity: locked ? 0.6 : 1 }}>
-        <Chip label="Tous les biens" selected={chosen === null} onPress={() => !locked && setChosen(null)} />
-        <Chip label="Choisir" selected={chosen !== null} onPress={() => !locked && setChosen(chosen ?? [])} />
+        <Chip label="Tous les biens" selected={value === null} onPress={() => !locked && onChange(null)} />
+        <Chip label="Choisir" selected={value !== null} onPress={() => !locked && onChange(list)} />
       </View>
-      {chosen !== null && !locked
+      {value !== null && !locked
         ? properties.map((p) => {
-            const on = value.includes(p.id);
+            const on = list.includes(p.id);
             return (
               <Pressable
                 key={p.id}
@@ -372,19 +404,7 @@ function MemberProperties({
                 accessibilityLabel={p.name}
                 onPress={() => toggle(p.id)}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6 }}>
-                <View
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 6,
-                    borderWidth: 2,
-                    borderColor: on ? c.primary : c.border,
-                    backgroundColor: on ? c.primary : 'transparent',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                  {on ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
-                </View>
+                <Box on={on} />
                 <Text variant="small" style={{ flex: 1, fontWeight: '600' }}>
                   {p.name}
                 </Text>
@@ -392,27 +412,49 @@ function MemberProperties({
             );
           })
         : null}
-      {chosen !== null && !locked && value.length === 0 ? (
+      {value !== null && !locked && list.length === 0 ? (
         <Text variant="small" tone="muted">
           Cochez au moins un bien.
         </Text>
-      ) : null}
-      {changed && (chosen === null || value.length > 0) ? (
-        <Button label="Enregistrer ses biens" compact onPress={() => onSave(value)} />
       ) : null}
     </View>
   );
 }
 
-/** Une case par permission. `locked` : offre gratuite, modèles seulement */
+/** Case à cocher */
+function Box({ on }: { on: boolean }) {
+  const { c } = useTheme();
+  return (
+    <View
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: on ? c.primary : c.border,
+        backgroundColor: on ? c.primary : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      {on ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
+    </View>
+  );
+}
+
+/**
+ * Une case par permission. `locked` : offre gratuite, modèles seulement. `scoped` : limité à certains biens, le
+ * journal (qui couvre tout l'espace) n'est pas proposé.
+ */
 function PermissionChecklist({
   value,
   onChange,
   locked,
+  scoped = false,
 }: {
   value: Permission[];
   onChange: (list: Permission[]) => void;
   locked: boolean;
+  scoped?: boolean;
 }) {
   const { c } = useTheme();
   const toggle = (p: Permission) => {
@@ -430,36 +472,27 @@ function PermissionChecklist({
         </Text>
       </View>
       {permissions.map((p) => {
-        const on = value.includes(p);
+        const off = locked || (scoped && p === 'activity.view');
+        const on = value.includes(p) && !(scoped && p === 'activity.view');
         return (
           <Pressable
             key={p}
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: on, disabled: locked }}
+            accessibilityState={{ checked: on, disabled: off }}
             accessibilityLabel={permissionLabels[p].label}
             accessibilityHint={permissionLabels[p].hint}
-            disabled={locked}
+            disabled={off}
             onPress={() => toggle(p)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, opacity: locked ? 0.6 : 1 }}>
-            <View
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 6,
-                borderWidth: 2,
-                borderColor: on ? c.primary : c.border,
-                backgroundColor: on ? c.primary : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              {on ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
-            </View>
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, opacity: off ? 0.6 : 1 }}>
+            <Box on={on} />
             <View style={{ flex: 1 }}>
               <Text variant="small" style={{ fontWeight: '600' }}>
                 {permissionLabels[p].label}
               </Text>
               <Text variant="small" tone="muted">
-                {permissionLabels[p].hint}
+                {scoped && p === 'activity.view'
+                  ? 'Pas avec une limite par bien : le journal couvre tout l’espace'
+                  : permissionLabels[p].hint}
               </Text>
             </View>
           </Pressable>
@@ -473,11 +506,15 @@ function InviteForm({
   organizationId,
   demo,
   customizable,
+  propertyScope,
+  properties,
   onSent,
 }: {
   organizationId: string | null;
   demo: boolean;
   customizable: boolean;
+  propertyScope: boolean;
+  properties: { id: string; name: string }[];
   onSent: () => void;
 }) {
   const { c } = useTheme();
@@ -486,6 +523,8 @@ function InviteForm({
   const [role, setRole] = useState<PermissionPreset>('collector');
   /** Cases cochées ; null : celles du modèle */
   const [custom, setCustom] = useState<Permission[] | null>(null);
+  /** Biens choisis ; null : tous */
+  const [scope, setScope] = useState<string[] | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<string>();
   const [error, setError] = useState<string>();
@@ -494,6 +533,10 @@ function InviteForm({
   const send = async () => {
     if (digits.length !== country.length) {
       setError(`Un numéro en ${country.name} compte ${country.length} chiffres.`);
+      return;
+    }
+    if (scope && scope.length === 0) {
+      setError('Cochez au moins un bien, ou choisissez « Tous les biens ».');
       return;
     }
     setSending(true);
@@ -506,10 +549,11 @@ function InviteForm({
         setSent(`Démo : avec votre compte, l’invitation partirait sur le WhatsApp du ${formatPhone(phone)}.`);
         return;
       }
-      await remote.invite(organizationId, phone, role, ticked);
+      await remote.invite(organizationId, phone, role, ticked, scope ?? undefined);
       setSent(`Invitation envoyée sur le WhatsApp du ${formatPhone(phone)}. Elle est valable 7 jours.`);
       setNational('');
       setCustom(null);
+      setScope(null);
       onSent();
     } catch (e) {
       setError(errorMessage(e));
@@ -566,7 +610,7 @@ function InviteForm({
         })}
       </View>
       {custom ? (
-        <PermissionChecklist value={custom} onChange={setCustom} locked={!customizable} />
+        <PermissionChecklist value={custom} onChange={setCustom} locked={!customizable} scoped={!!scope?.length} />
       ) : (
         <Button
           label="Personnaliser les permissions"
@@ -576,6 +620,9 @@ function InviteForm({
           onPress={() => setCustom(rolePresets[role])}
         />
       )}
+      {propertyScope && properties.length > 1 ? (
+        <PropertyPicker value={scope} onChange={setScope} properties={properties} locked={false} />
+      ) : null}
       <Button label={sending ? 'Envoi…' : 'Envoyer l’invitation'} icon={UserPlus} disabled={sending} onPress={send} />
       {sent ? (
         <Text variant="small" tone="primary" accessibilityRole="alert">

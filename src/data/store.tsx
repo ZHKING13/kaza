@@ -1910,7 +1910,7 @@ export function usePermissions() {
   const { remote: isRemote, organizations, organizationId } = useStore();
   const current = isRemote ? organizations.find((o) => o.id === organizationId) : undefined;
   const role: Role = current?.role || 'owner';
-  const granted = memberPermissions(role, current?.permissions);
+  const granted = memberPermissions(role, current?.permissions, current?.propertyIds);
   return {
     role,
     /** Facturation, équipe, identité et réglages de l'espace */

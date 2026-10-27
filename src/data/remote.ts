@@ -661,8 +661,8 @@ export const remote = {
 
   invitations: (orgId: string) => api.get<TeamInvitation[]>(`/user/organizations/${orgId}/invitations`),
 
-  invite: (orgId: string, phone: string, role: Role, permissions?: Permission[]) =>
-    api.post<TeamInvitation>(`/user/organizations/${orgId}/invitations`, { phone, role, permissions }),
+  invite: (orgId: string, phone: string, role: Role, permissions?: Permission[], propertyIds?: string[]) =>
+    api.post<TeamInvitation>(`/user/organizations/${orgId}/invitations`, { phone, role, permissions, propertyIds }),
 
   revokeInvitation: (orgId: string, invitationId: string) =>
     api.delete<void>(`/user/organizations/${orgId}/invitations/${invitationId}`),
