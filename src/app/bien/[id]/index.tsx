@@ -59,7 +59,10 @@ export default function BienDetail() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { payments, tenants, setPropertyPhoto, organizations, organizationId, remote: isRemote } = useStore();
-  const { canManage, canCollect } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('properties.manage');
+  const canLease = can('leases.manage');
+  const canCollect = can('payments.record');
   const { period: shown } = useViewPeriod();
   const s = usePropertySummaries(shown).find((x) => x.property.id === id);
   const [tab, setTab] = useState<Tab>('unites');
@@ -261,7 +264,7 @@ export default function BienDetail() {
                       key={u.id}
                       accessibilityRole="button"
                       accessibilityLabel={t ? undefined : `${u.label}, vacante : ajouter un locataire`}
-                      disabled={!t && !canManage}
+                      disabled={!t && !canLease}
                       onPress={() =>
                         t
                           ? router.push({ pathname: '/locataire/[id]', params: { id: t.tenant.id } })

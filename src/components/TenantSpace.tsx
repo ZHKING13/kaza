@@ -22,7 +22,9 @@ import { radius, space, useTheme } from '@/theme';
 export function TenantSpace({ tenant }: { tenant: Tenant }) {
   const { c } = useTheme();
   const { remote, mode, declarations, settings, regenerateTenantLink } = useStore();
-  const { canManage, canCollect } = usePermissions();
+  const { can, isOwner } = usePermissions();
+  const canManage = can('leases.manage');
+  const canCollect = can('messages.send');
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -96,7 +98,7 @@ export function TenantSpace({ tenant }: { tenant: Tenant }) {
         </Text>
       ) : null}
 
-      {canManage && !settings.payoutAccounts?.length ? (
+      {isOwner && !settings.payoutAccounts?.length ? (
         <Pressable accessibilityRole="button" onPress={() => router.push('/paiement-direct')}>
           <Text variant="small" tone="primary" style={{ fontWeight: '600' }}>
             Ajoutez vos numéros Wave ou Mobile Money pour que vos locataires vous paient directement →

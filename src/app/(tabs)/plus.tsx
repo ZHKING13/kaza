@@ -87,7 +87,7 @@ export default function Plus() {
   const { c } = useTheme();
   const { settings, profile, mode, session, signOut, outbox, remote, organizations, organizationId, invitations, switchOrganization, identity } =
     useStore();
-  const { role, canAudit, canManage } = usePermissions();
+  const { role, isOwner, can } = usePermissions();
   const plan = usePlan();
   const [confirmOut, setConfirmOut] = useState(false);
   const [switchError, setSwitchError] = useState<string>();
@@ -179,14 +179,14 @@ export default function Plus() {
           first
           onPress={remote ? () => router.push('/equipe') : undefined}
         />
-        {remote && canAudit ? <Row icon={History} label="Journal d’activité" onPress={() => router.push('/journal')} /> : null}
+        {remote && can('activity.view') ? <Row icon={History} label="Journal d’activité" onPress={() => router.push('/journal')} /> : null}
         <Row
           icon={Stamp}
           label="Identité et quittances"
           hint={identity.legalName ?? undefined}
           onPress={() => router.push('/identite')}
         />
-        {canManage && (remote || mode === 'demo') ? (
+        {isOwner && (remote || mode === 'demo') ? (
           <Row
             icon={Smartphone}
             label="Paiement direct"
@@ -194,7 +194,9 @@ export default function Plus() {
             onPress={() => router.push('/paiement-direct')}
           />
         ) : null}
-        <Row icon={FileText} label="Rapports et exports" onPress={() => router.push('/rapports')} />
+        {can('reports.view') ? (
+          <Row icon={FileText} label="Rapports et exports" onPress={() => router.push('/rapports')} />
+        ) : null}
         <Row
           icon={Settings}
           label="Paramètres"

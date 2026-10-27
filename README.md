@@ -62,9 +62,12 @@ Fonctionnement en mode serveur :
   l'application WhatsApp du bailleur pour un message personnel.
 - **Équipe** (étape 7) : Plus › Équipe et gérants. Le propriétaire invite par numéro (gérant, collecteur, lecteur),
   change les rôles, retire un membre ; la personne invitée voit l'invitation en se connectant (avant de créer son
-  propre espace, ou sur l'accueil) et la rejoint ou la refuse. Un membre peut quitter l'espace. Les boutons suivent
-  le rôle (un collecteur encaisse et relance, mais n'ajoute ni bien ni locataire, n'enregistre pas de départ et
-  n'annule pas de paiement ; un lecteur consulte). Plus › Journal d'activité (propriétaire, gérant) : qui a fait quoi.
+  propre espace, ou sur l'accueil) et la rejoint ou la refuse. Un membre peut quitter l'espace. **Permissions** : à
+  l'invitation et sur chaque membre, le propriétaire choisit un modèle (gérant, collecteur, lecteur), puis coche ou
+  décoche chaque permission (noter, annuler un paiement, relancer, baux, biens, dépenses, rapports, journal ; offres
+  Famille et Agence, modèles seulement en Gratuit). Les boutons suivent les permissions du membre
+  (`usePermissions().can`, copie de `permissions.ts` du domaine 0.11.0 dans `src/data/permissions.ts`). Plus › Journal
+  d'activité (permission « journal ») : qui a fait quoi.
 - **Plusieurs espaces** : son propre espace et ceux où l'on a été invité ; changement dans l'onglet Plus (refusé tant
   que des enregistrements hors ligne attendent d'être envoyés). Rôles et invitations sont relus à l'ouverture de
   l'application : un membre retiré quitte l'espace sur son téléphone.

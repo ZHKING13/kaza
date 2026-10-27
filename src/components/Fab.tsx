@@ -11,7 +11,8 @@ import { Text } from './Text';
 export function Fab() {
   const { c } = useTheme();
   // Un lecteur consulte seulement
-  const { canCollect } = usePermissions();
+  const { can } = usePermissions();
+  const canCollect = can('payments.record');
   if (!canCollect) return null;
   return (
     <Pressable

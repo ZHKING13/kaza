@@ -37,7 +37,8 @@ export default function PaiementDirect() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { settings, setPayoutAccounts } = useStore();
-  const { canManage } = usePermissions();
+  // Les numéros de paiement font partie des réglages de l'espace : propriétaire
+  const { isOwner: canManage } = usePermissions();
   const [rows, setRows] = useState<Row[]>(() => (settings.payoutAccounts ?? []).map(toRow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();

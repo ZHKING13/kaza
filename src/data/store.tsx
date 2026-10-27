@@ -15,6 +15,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { storageKeyOf, toDataUri } from '@/lib/images';
 
+import { memberPermissions, type Permission } from './permissions';
 import { buildPayments, demoDeclarations, demoExpenses, demoPayoutAccounts, demoTenants, properties, units } from './mock';
 import { computeSettlement } from './ledger';
 import { type OrganizationSubscription, type PlanId, type PlanLimits, plans } from './plans';
@@ -63,9 +64,22 @@ import type {
   Unit,
 } from './types';
 
-export type OrganizationSummary = { id: string; name: string; role: Role; type?: 'individual' | 'agency' };
+export type OrganizationSummary = {
+  id: string;
+  name: string;
+  role: Role;
+  type?: 'individual' | 'agency';
+  /** Permissions de l'utilisateur dans l'espace ; absentes (ancienne version enregistrée) : celles du rôle */
+  permissions?: Permission[];
+};
 
-const toSummary = (o: ApiOrganization): OrganizationSummary => ({ id: o.id, name: o.name, role: o.role, type: o.type });
+const toSummary = (o: ApiOrganization): OrganizationSummary => ({
+  id: o.id,
+  name: o.name,
+  role: o.role,
+  type: o.type,
+  permissions: o.permissions,
+});
 
 export type Settings = {
   prorata: ProrataRule;
@@ -1886,21 +1900,19 @@ export function useFormerTenants() {
 }
 
 /**
- * Ce que le rôle permet dans l'espace ouvert (le serveur vérifie de toute façon). En mode démo ou
- * local, l'utilisateur est propriétaire.
+ * Ce que l'utilisateur peut faire dans l'espace ouvert : ses permissions, réglées par le propriétaire (le serveur
+ * vérifie de toute façon). En mode démo ou local, l'utilisateur est propriétaire.
  */
 export function usePermissions() {
   const { remote: isRemote, organizations, organizationId } = useStore();
-  const role: Role = (isRemote && organizations.find((o) => o.id === organizationId)?.role) || 'owner';
+  const current = isRemote ? organizations.find((o) => o.id === organizationId) : undefined;
+  const role: Role = current?.role || 'owner';
+  const granted = memberPermissions(role, current?.permissions);
   return {
     role,
+    /** Facturation, équipe, identité et réglages de l'espace */
     isOwner: role === 'owner',
-    /** Biens, locataires, départs, annulations */
-    canManage: role === 'owner' || role === 'manager',
-    /** Encaisser, relancer, envoyer une quittance */
-    canCollect: role !== 'viewer',
-    /** Journal d'activité, invitations en attente */
-    canAudit: role === 'owner' || role === 'manager',
+    can: (permission: Permission) => granted.includes(permission),
   };
 }
 

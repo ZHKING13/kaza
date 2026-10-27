@@ -9,7 +9,8 @@ import { usePermissions, useStore } from '@/data/store';
 export default function NouvelleDepense() {
   const { propertyId } = useLocalSearchParams<{ propertyId: string }>();
   const { properties } = useStore();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('expenses.manage');
   const property = properties.find((p) => p.id === propertyId);
   if (!property || !canManage) {
     return <EmptyState icon={Receipt} title="Dépense impossible" body="Ce bien n’existe plus, ou votre rôle ne le permet pas." />;

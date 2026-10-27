@@ -70,7 +70,8 @@ function VoidPayment({ paymentId }: { paymentId: string }) {
 /** Aperçu de la quittance (ou du reçu partiel) d'un paiement, avec partage en PDF. */
 export default function Quittance() {
   const { c, status } = useTheme();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canVoid = can('payments.void');
   const { id } = useLocalSearchParams<{ id: string }>();
   const r = useReceipt(id);
   const { color: brandSoft } = useReceiptBrand();
@@ -124,7 +125,7 @@ export default function Quittance() {
       <PdfButton label={full ? 'Partager la quittance (PDF)' : 'Partager le reçu (PDF)'} html={r.html} fileName={r.fileName} variant="primary" />
       <Button label="Envoyer un message WhatsApp" icon={MessageCircle} variant="secondary" onPress={() => openWhatsApp(tenant.phone, text)} />
       {/* Les retenues sur caution font partie du solde de départ : pas d'annulation */}
-      {canManage && payment.method !== 'caution' && !tenant.exitDate ? <VoidPayment paymentId={payment.id} /> : null}
+      {canVoid && payment.method !== 'caution' && !tenant.exitDate ? <VoidPayment paymentId={payment.id} /> : null}
     </ScrollView>
   );
 }
@@ -132,7 +133,8 @@ export default function Quittance() {
 /** Compte en ligne : Kaza envoie le PDF sur le WhatsApp du locataire (repli SMS, texte seul). */
 function SendReceiptByKaza({ paymentId, full, disabled }: { paymentId: string; full: boolean; disabled: boolean }) {
   const { enabled, organizationId } = useServerMessaging();
-  const { canCollect } = usePermissions();
+  const { can } = usePermissions();
+  const canCollect = can('messages.send');
   if (!enabled || !organizationId || disabled || !canCollect) return null;
   return (
     <KazaSendButton

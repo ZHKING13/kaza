@@ -23,7 +23,8 @@ const REJECT_REASONS = ['Rien reçu sur mon numéro', 'Montant différent', 'Pai
 /** Paiement signalé par un locataire depuis son espace : vérifier qu'on a reçu l'argent, puis encaisser ou refuser. */
 function DeclarationCard({ d, onReject }: { d: PaymentDeclaration; onReject: () => void }) {
   const { c } = useTheme();
-  const { canCollect } = usePermissions();
+  const { can } = usePermissions();
+  const canCollect = can('payments.record');
   const summary = useTenantSummaries().find((s) => s.tenant.id === d.tenantId);
   const name = summary ? `${summary.tenant.firstName} ${summary.tenant.lastName}` : 'Ancien locataire';
   return (

@@ -19,7 +19,8 @@ export default function Depense() {
   const { c } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { expenses, expenseSchedules, voidExpense, stopExpenseSchedule } = useStore();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('expenses.manage');
   const expense = expenses.find((e) => e.id === id);
   const schedule = expense?.scheduleId ? expenseSchedules.find((s) => s.id === expense.scheduleId) : undefined;
   const [voiding, setVoiding] = useState(false);

@@ -102,7 +102,8 @@ function PropertyCard({ s }: { s: PropertySummary }) {
 
 export default function Biens() {
   const { c } = useTheme();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('properties.manage');
   const summaries = usePropertySummaries();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');

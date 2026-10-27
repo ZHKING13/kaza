@@ -20,6 +20,7 @@ import type {
   Tenant,
   Unit,
 } from './types';
+import type { Permission } from './permissions';
 
 /**
  * Données du serveur et conversion vers le modèle de l'application.
@@ -67,7 +68,12 @@ export type ApiOrganization = {
   payoutAccounts?: { method: PayoutMethod; number: string; name: string | null }[];
   /** Offre en vigueur (essai, payée, grâce, mode limité) */
   subscription?: OrganizationSubscription;
+  /** Rôle de l'utilisateur ; pour un collaborateur, le modèle de départ */
   role: Role;
+  /** Permissions de l'utilisateur (toutes pour le propriétaire) ; absentes d'un ancien serveur : celles du rôle */
+  permissions?: Permission[];
+  /** Biens accessibles ; null : tous */
+  propertyIds?: string[] | null;
 };
 
 /** Identité imprimée sur les quittances (toutes facultatives) */
@@ -143,6 +149,8 @@ export type TeamMember = {
   lastName: string | null;
   phone: string | null;
   role: Role;
+  permissions?: Permission[];
+  propertyIds?: string[] | null;
   joinedAt: string;
   isMe: boolean;
 };
@@ -152,6 +160,8 @@ export type TeamInvitation = {
   id: string;
   phone: string;
   role: Role;
+  permissions?: Permission[];
+  propertyIds?: string[] | null;
   expiresAt: string;
   createdAt: string;
   invitedBy: { id: string; name: string } | null;
@@ -643,15 +653,16 @@ export const remote = {
 
   members: (orgId: string) => api.get<TeamMember[]>(`/user/organizations/${orgId}/members`),
 
-  changeRole: (orgId: string, userId: string, role: Role) =>
-    api.patch<TeamMember[]>(`/user/organizations/${orgId}/members/${userId}`, { role }),
+  /** Modèle (ses permissions, sauf si `permissions` est donné) ou cases cochées d'un membre */
+  updateMember: (orgId: string, userId: string, body: { role?: Role; permissions?: Permission[] }) =>
+    api.patch<TeamMember[]>(`/user/organizations/${orgId}/members/${userId}`, body),
 
   removeMember: (orgId: string, userId: string) => api.delete<void>(`/user/organizations/${orgId}/members/${userId}`),
 
   invitations: (orgId: string) => api.get<TeamInvitation[]>(`/user/organizations/${orgId}/invitations`),
 
-  invite: (orgId: string, phone: string, role: Role) =>
-    api.post<TeamInvitation>(`/user/organizations/${orgId}/invitations`, { phone, role }),
+  invite: (orgId: string, phone: string, role: Role, permissions?: Permission[]) =>
+    api.post<TeamInvitation>(`/user/organizations/${orgId}/invitations`, { phone, role, permissions }),
 
   revokeInvitation: (orgId: string, invitationId: string) =>
     api.delete<void>(`/user/organizations/${orgId}/invitations/${invitationId}`),

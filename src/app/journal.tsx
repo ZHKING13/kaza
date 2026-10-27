@@ -83,6 +83,8 @@ export function describeActivity(e: ActivityEntry): string {
       return `${subject} a rejoint l’espace comme ${role(d.role)}`;
     case 'member.role_changed':
       return `${who} a fait passer ${subject} de ${role(d.from)} à ${role(d.to)}`;
+    case 'member.permissions_updated':
+      return `${who} a modifié les permissions de ${subject}`;
     case 'member.removed':
       return `${who} a retiré ${subject} de l’espace`;
     case 'member.left':

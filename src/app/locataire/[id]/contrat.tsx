@@ -37,7 +37,8 @@ export default function ContratLocataire() {
   const { c } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { tenants, today, settings, setEndDate, giveNotice, withdrawNotice } = useStore();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('leases.manage');
   const tenant = tenants.find((t) => t.id === id);
   const rules = settings.leases ?? defaultLeaseSettings;
   const todayIso = noon(today);

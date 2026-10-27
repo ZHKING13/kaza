@@ -23,7 +23,8 @@ export default function Mandant() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { properties, setLandlord } = useStore();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('properties.manage');
   const property = properties.find((p) => p.id === id);
   const initial = property?.landlordPhone ? splitPhone(property.landlordPhone, countries[0]) : { country: countries[0], national: '' };
 

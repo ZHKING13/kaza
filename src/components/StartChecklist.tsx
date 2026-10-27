@@ -16,7 +16,8 @@ export function StartChecklist() {
   const { c } = useTheme();
   const { properties, tenants, payments, mode } = useStore();
   // Créer biens et locataires : propriétaire et gérant
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('properties.manage');
   const steps: Step[] = [
     {
       done: properties.length > 0,

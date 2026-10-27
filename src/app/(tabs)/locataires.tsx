@@ -23,7 +23,8 @@ const order: Record<RentStatus, number> = { late: 0, partial: 1, upcoming: 2, pa
 
 export default function Locataires() {
   const { c } = useTheme();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('leases.manage');
   const { period } = useViewPeriod();
   const summaries = useTenantSummaries(period);
   const former = useFormerTenants();

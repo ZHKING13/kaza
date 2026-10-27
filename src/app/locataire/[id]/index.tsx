@@ -94,7 +94,10 @@ export default function LocataireDetail() {
   const { c, status } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { payments, period, organizationId } = useStore();
-  const { canManage, canCollect } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('leases.manage');
+  const canCollect = can('payments.record');
+  const canSend = can('messages.send');
   const summary = useTenantSummaries().find((s) => s.tenant.id === id);
   // Mois précédents non soldés (le mois en cours est compté à part)
   const leaseMonths = useLeaseMonths(id);
@@ -253,9 +256,9 @@ export default function LocataireDetail() {
         <TenantSpace tenant={tenant} />
 
         {/* Le lien règle le mois en cours (montant calculé par le serveur) */}
-        <OnlinePayment leaseId={tenant.id} remaining={current} canSend={canCollect} />
+        <OnlinePayment leaseId={tenant.id} remaining={current} canSend={canSend} />
 
-        <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0 && canCollect} />
+        <KazaMessages leaseId={tenant.id} organizationId={organizationId} canRemind={remaining > 0 && canSend} />
 
         <History items={historyOf(tenant.id)} />
 

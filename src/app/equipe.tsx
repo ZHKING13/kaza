@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { UserPlus } from 'lucide-react-native';
+import { Check, Lock, SlidersHorizontal, UserPlus } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -12,20 +12,34 @@ import { FormError } from '@/components/FormError';
 import { PhoneField } from '@/components/PhoneField';
 import { Text } from '@/components/Text';
 import { countries, type Country } from '@/data/countries';
+import {
+  memberPermissions,
+  type Permission,
+  permissionLabels,
+  permissions,
+  presetOf,
+  type PermissionPreset,
+  rolePresets,
+} from '@/data/permissions';
 import { remote, type Role, type TeamInvitation, type TeamMember } from '@/data/remote';
-import { roleLabels, usePermissions, useStore } from '@/data/store';
+import { roleLabels, usePermissions, usePlan, useStore } from '@/data/store';
 import { errorMessage } from '@/lib/api';
 import { formatDate, formatPhone } from '@/lib/format';
 import { radius, space, useTheme } from '@/theme';
 
-const INVITABLE: Role[] = ['manager', 'collector', 'viewer'];
+const INVITABLE: PermissionPreset[] = ['manager', 'collector', 'viewer'];
 
-const roleHints: Record<Role, string> = {
-  owner: 'Tous les droits.',
-  manager: 'Biens, locataires, encaissements, départs. Pas les paramètres ni l’équipe.',
+const roleHints: Record<PermissionPreset, string> = {
+  manager: 'Biens, locataires, encaissements, dépenses, départs. Pas les réglages ni l’équipe.',
   collector: 'Encaisser et relancer. Consulte le reste.',
   viewer: 'Consulte seulement.',
 };
+
+/** « Collecteur », ou « Collecteur (personnalisé) » quand les cases ne sont plus celles du modèle */
+const accessLabel = (role: Role, list?: Permission[]) =>
+  role === 'owner' || !list || presetOf(list) === role ? roleLabels[role] : `${roleLabels[role]} (personnalisé)`;
+
+const sameList = (a: readonly string[], b: readonly string[]) => a.join() === b.join();
 
 const memberName = (m: TeamMember) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || (m.phone ? formatPhone(m.phone) : 'Membre');
 
@@ -33,7 +47,10 @@ const memberName = (m: TeamMember) => `${m.firstName ?? ''} ${m.lastName ?? ''}`
 export default function Equipe() {
   const { c } = useTheme();
   const { organizationId, organizations, leaveOrganization } = useStore();
-  const { isOwner, canAudit } = usePermissions();
+  const { isOwner, can } = usePermissions();
+  const canAudit = can('activity.view');
+  // Cocher chaque permission : offres Famille et Agence ; sinon modèles seulement
+  const customizable = usePlan().limits.customPermissions;
   const organization = organizations.find((o) => o.id === organizationId);
 
   const [members, setMembers] = useState<TeamMember[] | null>(null);
@@ -82,7 +99,8 @@ export default function Equipe() {
           {organization?.name ?? 'Votre espace'}
         </Text>
         <Text variant="small" tone="muted">
-          Les personnes qui travaillent avec vous dans cet espace. Chacune ne voit et ne fait que ce que son rôle permet.
+          Les personnes qui travaillent avec vous dans cet espace. Tout le monde voit les loyers et les retards ; vous
+          décidez de ce que chacun peut faire.
         </Text>
       </View>
 
@@ -104,7 +122,7 @@ export default function Equipe() {
                       {m.isMe ? ' (vous)' : ''}
                     </Text>
                     <Text variant="small" tone="muted">
-                      {roleLabels[m.role]}
+                      {accessLabel(m.role, m.permissions)}
                       {m.phone && (m.firstName || m.lastName) ? ` · ${formatPhone(m.phone)}` : ''}
                     </Text>
                   </View>
@@ -116,16 +134,25 @@ export default function Equipe() {
                 </Pressable>
                 {editable && open === m.userId ? (
                   <View style={{ paddingHorizontal: space.md, paddingBottom: space.md, gap: space.sm }}>
+                    <Text variant="small" tone="muted">
+                      Modèle (remet ses cases)
+                    </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
                       {INVITABLE.map((r) => (
                         <Chip
                           key={r}
                           label={roleLabels[r]}
                           selected={m.role === r}
-                          onPress={() => act(() => remote.changeRole(organizationId!, m.userId, r))}
+                          onPress={() => act(() => remote.updateMember(organizationId!, m.userId, { role: r }))}
                         />
                       ))}
                     </View>
+                    <MemberPermissions
+                      key={(m.permissions ?? []).join()}
+                      member={m}
+                      locked={!customizable}
+                      onSave={(list) => act(() => remote.updateMember(organizationId!, m.userId, { permissions: list }))}
+                    />
                     <Button
                       label="Retirer de l’espace"
                       variant="ghost"
@@ -170,7 +197,7 @@ export default function Equipe() {
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyStrong">{formatPhone(inv.phone)}</Text>
                   <Text variant="small" tone="muted">
-                    {roleLabels[inv.role]} · valable jusqu’au {formatDate(inv.expiresAt)}
+                    {accessLabel(inv.role, inv.permissions)} · valable jusqu’au {formatDate(inv.expiresAt)}
                   </Text>
                 </View>
                 {isOwner ? (
@@ -197,7 +224,7 @@ export default function Equipe() {
         </>
       ) : null}
 
-      {isOwner && organizationId ? <InviteForm organizationId={organizationId} onSent={load} /> : null}
+      {isOwner && organizationId ? <InviteForm organizationId={organizationId} customizable={customizable} onSent={load} /> : null}
 
       <FormError message={error} />
 
@@ -230,11 +257,107 @@ export default function Equipe() {
   );
 }
 
-function InviteForm({ organizationId, onSent }: { organizationId: string; onSent: () => void }) {
+/** Cases cochées d'un membre, enregistrées d'un coup */
+function MemberPermissions({
+  member,
+  locked,
+  onSave,
+}: {
+  member: TeamMember;
+  locked: boolean;
+  onSave: (list: Permission[]) => void;
+}) {
+  const current = memberPermissions(member.role, member.permissions);
+  const [list, setList] = useState<Permission[]>(current);
+  const changed = !sameList(list, current);
+  return (
+    <View style={{ gap: space.xs }}>
+      <PermissionChecklist value={list} onChange={setList} locked={locked} />
+      {changed ? <Button label="Enregistrer ses permissions" compact onPress={() => onSave(list)} /> : null}
+    </View>
+  );
+}
+
+/** Une case par permission. `locked` : offre gratuite, modèles seulement */
+function PermissionChecklist({
+  value,
+  onChange,
+  locked,
+}: {
+  value: Permission[];
+  onChange: (list: Permission[]) => void;
+  locked: boolean;
+}) {
+  const { c } = useTheme();
+  const toggle = (p: Permission) => {
+    const next = new Set(value);
+    if (next.has(p)) next.delete(p);
+    else next.add(p);
+    onChange(permissions.filter((x) => next.has(x)));
+  };
+  return (
+    <View style={{ gap: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+        {locked ? <Lock size={14} color={c.textMuted} /> : <SlidersHorizontal size={14} color={c.textMuted} />}
+        <Text variant="small" tone="muted" style={{ flex: 1 }}>
+          {locked ? 'Régler chaque permission : compris dans l’offre Famille' : 'Ce que cette personne peut faire'}
+        </Text>
+      </View>
+      {permissions.map((p) => {
+        const on = value.includes(p);
+        return (
+          <Pressable
+            key={p}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: on, disabled: locked }}
+            accessibilityLabel={permissionLabels[p].label}
+            accessibilityHint={permissionLabels[p].hint}
+            disabled={locked}
+            onPress={() => toggle(p)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, opacity: locked ? 0.6 : 1 }}>
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: on ? c.primary : c.border,
+                backgroundColor: on ? c.primary : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              {on ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="small" style={{ fontWeight: '600' }}>
+                {permissionLabels[p].label}
+              </Text>
+              <Text variant="small" tone="muted">
+                {permissionLabels[p].hint}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function InviteForm({
+  organizationId,
+  customizable,
+  onSent,
+}: {
+  organizationId: string;
+  customizable: boolean;
+  onSent: () => void;
+}) {
   const { c } = useTheme();
   const [country, setCountry] = useState<Country>(countries[0]);
   const [national, setNational] = useState('');
-  const [role, setRole] = useState<Role>('collector');
+  const [role, setRole] = useState<PermissionPreset>('collector');
+  /** Cases cochées ; null : celles du modèle */
+  const [custom, setCustom] = useState<Permission[] | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<string>();
   const [error, setError] = useState<string>();
@@ -250,9 +373,11 @@ function InviteForm({ organizationId, onSent }: { organizationId: string; onSent
     setSent(undefined);
     try {
       const phone = `+${country.dial}${digits}`;
-      await remote.invite(organizationId, phone, role);
+      const ticked = custom && !sameList(custom, rolePresets[role]) ? custom : undefined;
+      await remote.invite(organizationId, phone, role, ticked);
       setSent(`Invitation envoyée sur le WhatsApp du ${formatPhone(phone)}. Elle est valable 7 jours.`);
       setNational('');
+      setCustom(null);
       onSent();
     } catch (e) {
       setError(errorMessage(e));
@@ -287,7 +412,10 @@ function InviteForm({ organizationId, onSent }: { organizationId: string; onSent
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
               accessibilityLabel={roleLabels[r]}
-              onPress={() => setRole(r)}
+              onPress={() => {
+                setRole(r);
+                setCustom(null);
+              }}
               style={{
                 padding: space.sm,
                 borderRadius: radius.md,
@@ -305,6 +433,17 @@ function InviteForm({ organizationId, onSent }: { organizationId: string; onSent
           );
         })}
       </View>
+      {custom ? (
+        <PermissionChecklist value={custom} onChange={setCustom} locked={!customizable} />
+      ) : (
+        <Button
+          label="Personnaliser les permissions"
+          icon={SlidersHorizontal}
+          variant="ghost"
+          compact
+          onPress={() => setCustom(rolePresets[role])}
+        />
+      )}
       <Button label={sending ? 'Envoi…' : 'Envoyer l’invitation'} icon={UserPlus} disabled={sending} onPress={send} />
       {sent ? (
         <Text variant="small" tone="primary" accessibilityRole="alert">

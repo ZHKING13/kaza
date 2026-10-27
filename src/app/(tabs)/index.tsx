@@ -39,7 +39,8 @@ export default function Accueil() {
       syncUnread(mode, remote);
     }, [mode, remote]),
   );
-  const { canCollect } = usePermissions();
+  const { can } = usePermissions();
+  const canCollect = can('messages.send');
   const current = organizations.length > 1 ? organizations.find((o) => o.id === organizationId) : undefined;
   const { period: shown } = useViewPeriod();
   const summaries = useTenantSummaries();

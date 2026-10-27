@@ -40,7 +40,8 @@ export default function RevisionLoyer() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { tenants, units, period, payments, reviseRent, cancelRentRevision, remote: isRemote } = useStore();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('leases.manage');
   const { enabled: messaging } = useServerMessaging();
   const tenant = tenants.find((t) => t.id === id);
   const unit = units.find((u) => u.id === tenant?.unitId);

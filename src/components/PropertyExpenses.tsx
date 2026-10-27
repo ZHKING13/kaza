@@ -16,7 +16,8 @@ import { radius, space, useTheme } from '@/theme';
 export function PropertyExpenses({ propertyId }: { propertyId: string }) {
   const { c, status } = useTheme();
   const { period, units, expenseSchedules } = useStore();
-  const { canManage } = usePermissions();
+  const { can } = usePermissions();
+  const canManage = can('expenses.manage');
   const expenses = useExpenses(propertyId);
   const ids = [propertyId];
   const month = useReport(period, period, ids).totals;

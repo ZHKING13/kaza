@@ -330,18 +330,24 @@ par chaque snapshot (`identity`, `properties[].photoUrl`). Erreurs : `extensionI
 | Méthode | Route | Corps | Réponse `data` | Rôles | Écran |
 |---|---|---|---|---|---|
 | GET | `…/members` | — | `[Member]` | tous | Plus › Équipe |
-| PATCH | `…/members/:userId` | `{ role }` | `[Member]` | propriétaire | Équipe › Modifier |
+| PATCH | `…/members/:userId` | `{ role?, permissions?, propertyIds? }` | `[Member]` | propriétaire | Équipe › Modifier |
 | DELETE | `…/members/:userId` | — | — | propriétaire, ou soi-même (quitter) | Équipe |
-| GET | `…/invitations` | — | `[Invitation]` | propriétaire, gérant | Équipe |
-| POST | `…/invitations` | `{ phone, role }` | `Invitation` | propriétaire | Équipe › Inviter |
+| GET | `…/invitations` | — | `[Invitation]` | permission `activity.view` | Équipe |
+| POST | `…/invitations` | `{ phone, role, permissions?, propertyIds? }` | `Invitation` | propriétaire | Équipe › Inviter |
 | DELETE | `…/invitations/:id` | — | — | propriétaire | Équipe › Annuler |
 | GET | `/user/invitations` | — | `[ReceivedInvitation]` | compte | Onboarding, accueil, Invitations |
 | POST | `/user/invitations/:id/accept` · `decline` | — | `Organization` · — | compte | Rejoindre · Refuser |
 | GET | `…/activity` | `?cursor=&limit=30` | `{ items: [Activity], nextCursor }` | propriétaire, gérant | Plus › Journal d'activité |
 
 `role` ∈ `manager | collector | viewer` (le propriétaire est le créateur de l'espace).
-`Member = { userId, firstName, lastName, phone, role, joinedAt, isMe }`,
-`Invitation = { id, phone, role, status, expiresAt, createdAt, invitedBy: { id, name } }`,
+`Member = { userId, firstName, lastName, phone, role, permissions, propertyIds, joinedAt, isMe }`,
+`Invitation = { id, phone, role, permissions, propertyIds, status, expiresAt, createdAt, invitedBy: { id, name } }`,
+`Organization` porte aussi `permissions` et `propertyIds` (null : tous les biens) de l'utilisateur.
+
+- **Permissions** (domaine 0.11.0) : `payments.record`, `payments.void`, `messages.send`, `leases.manage`,
+  `properties.manage`, `expenses.manage`, `reports.view`, `activity.view`. `role` est le modèle de départ ; sans
+  `permissions`, celles du modèle. Cocher autre chose que le modèle : offres Famille et Agence ; limiter à des biens :
+  Agence (sinon 403 `featureLocked`). Journal : `member.permissions_updated`.
 `ReceivedInvitation = { id, role, expiresAt, organization: { id, name, type }, invitedBy }`,
 `Activity = { id, action, actor: { id, name, role }, entityType, entityId, subject, data, createdAt }`.
 
