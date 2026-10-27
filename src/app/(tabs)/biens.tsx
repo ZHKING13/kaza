@@ -102,8 +102,9 @@ function PropertyCard({ s }: { s: PropertySummary }) {
 
 export default function Biens() {
   const { c } = useTheme();
-  const { can } = usePermissions();
-  const canManage = can('properties.manage');
+  const { can, scoped } = usePermissions();
+  // Un membre limité à certains biens n'en crée pas
+  const canAdd = can('properties.manage') && !scoped;
   const summaries = usePropertySummaries();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -121,7 +122,7 @@ export default function Biens() {
       title="Biens"
       subtitle={`${summaries.length} biens · ${unitCount} unités`}
       right={
-        !canManage ? undefined : (
+        !canAdd ? undefined : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Ajouter un bien"

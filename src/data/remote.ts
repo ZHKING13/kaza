@@ -654,7 +654,7 @@ export const remote = {
   members: (orgId: string) => api.get<TeamMember[]>(`/user/organizations/${orgId}/members`),
 
   /** Modèle (ses permissions, sauf si `permissions` est donné) ou cases cochées d'un membre */
-  updateMember: (orgId: string, userId: string, body: { role?: Role; permissions?: Permission[] }) =>
+  updateMember: (orgId: string, userId: string, body: { role?: Role; permissions?: Permission[]; propertyIds?: string[] }) =>
     api.patch<TeamMember[]>(`/user/organizations/${orgId}/members/${userId}`, body),
 
   removeMember: (orgId: string, userId: string) => api.delete<void>(`/user/organizations/${orgId}/members/${userId}`),

@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { Check, Lock, SlidersHorizontal, UserPlus } from 'lucide-react-native';
+import { Building2, Check, Lock, SlidersHorizontal, UserPlus } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -50,12 +50,12 @@ const memberName = (m: TeamMember) => `${m.firstName ?? ''} ${m.lastName ?? ''}`
  */
 export default function Equipe() {
   const { c } = useTheme();
-  const { organizationId, organizations, leaveOrganization, mode } = useStore();
+  const { organizationId, organizations, leaveOrganization, mode, properties } = useStore();
   const demo = mode === 'demo';
   const { isOwner, can } = usePermissions();
   const canAudit = can('activity.view');
   // Cocher chaque permission : offres Famille et Agence ; sinon modèles seulement
-  const customizable = usePlan().limits.customPermissions;
+  const { customPermissions: customizable, propertyScope } = usePlan().limits;
   const organization = organizations.find((o) => o.id === organizationId);
 
   const [members, setMembers] = useState<TeamMember[] | null>(null);
@@ -101,7 +101,10 @@ export default function Equipe() {
   const me = members?.find((m) => m.isMe);
 
   /** Nouveau modèle (ses permissions) ou cases cochées d'un membre ; en démo, sur le téléphone seulement */
-  const update = async (userId: string, body: { role?: PermissionPreset; permissions?: Permission[] }) => {
+  const update = async (
+    userId: string,
+    body: { role?: PermissionPreset; permissions?: Permission[]; propertyIds?: string[] },
+  ) => {
     if (!demo) {
       await remote.updateMember(organizationId!, userId, body);
       return;
@@ -115,6 +118,7 @@ export default function Equipe() {
                 ...m,
                 role: body.role ?? m.role,
                 permissions: body.permissions ?? (body.role ? rolePresets[body.role] : m.permissions),
+                propertyIds: body.propertyIds ? (body.propertyIds.length ? body.propertyIds : null) : m.propertyIds,
               },
         ) ?? null,
     );
@@ -152,6 +156,9 @@ export default function Equipe() {
                     </Text>
                     <Text variant="small" tone="muted">
                       {accessLabel(m.role, m.permissions)}
+                      {m.role !== 'owner' && m.propertyIds?.length
+                        ? ` · ${m.propertyIds.length} bien${m.propertyIds.length > 1 ? 's' : ''}`
+                        : ''}
                       {m.phone && (m.firstName || m.lastName) ? ` · ${formatPhone(m.phone)}` : ''}
                     </Text>
                   </View>
@@ -181,6 +188,13 @@ export default function Equipe() {
                       member={m}
                       locked={!customizable}
                       onSave={(list) => act(() => update(m.userId, { permissions: list }))}
+                    />
+                    <MemberProperties
+                      key={`biens-${(m.propertyIds ?? []).join()}`}
+                      member={m}
+                      properties={properties}
+                      locked={!propertyScope}
+                      onSave={(ids) => act(() => update(m.userId, { propertyIds: ids }))}
                     />
                     <Button
                       label="Retirer de l’espace"
@@ -309,6 +323,83 @@ function MemberPermissions({
     <View style={{ gap: space.xs }}>
       <PermissionChecklist value={list} onChange={setList} locked={locked} />
       {changed ? <Button label="Enregistrer ses permissions" compact onPress={() => onSave(list)} /> : null}
+    </View>
+  );
+}
+
+/**
+ * Biens confiés à un membre (offre Agence) : tous, ou ceux qu'on choisit. Le serveur ne lui envoie que ceux-là ;
+ * une liste vide veut dire tous.
+ */
+function MemberProperties({
+  member,
+  properties,
+  locked,
+  onSave,
+}: {
+  member: TeamMember;
+  properties: { id: string; name: string }[];
+  locked: boolean;
+  onSave: (ids: string[]) => void;
+}) {
+  const { c } = useTheme();
+  const current = member.propertyIds ?? [];
+  const [chosen, setChosen] = useState<string[] | null>(current.length ? current : null);
+  const value = chosen ?? [];
+  const changed = !sameList(value, current);
+  const toggle = (id: string) =>
+    setChosen(properties.map((p) => p.id).filter((x) => (x === id ? !value.includes(x) : value.includes(x))));
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+        {locked ? <Lock size={14} color={c.textMuted} /> : <Building2 size={14} color={c.textMuted} />}
+        <Text variant="small" tone="muted" style={{ flex: 1 }}>
+          {locked ? 'Limiter à certains biens : compris dans l’offre Agence' : 'Les biens qu’elle gère'}
+        </Text>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, opacity: locked ? 0.6 : 1 }}>
+        <Chip label="Tous les biens" selected={chosen === null} onPress={() => !locked && setChosen(null)} />
+        <Chip label="Choisir" selected={chosen !== null} onPress={() => !locked && setChosen(chosen ?? [])} />
+      </View>
+      {chosen !== null && !locked
+        ? properties.map((p) => {
+            const on = value.includes(p.id);
+            return (
+              <Pressable
+                key={p.id}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
+                accessibilityLabel={p.name}
+                onPress={() => toggle(p.id)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6 }}>
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    borderWidth: 2,
+                    borderColor: on ? c.primary : c.border,
+                    backgroundColor: on ? c.primary : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  {on ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
+                </View>
+                <Text variant="small" style={{ flex: 1, fontWeight: '600' }}>
+                  {p.name}
+                </Text>
+              </Pressable>
+            );
+          })
+        : null}
+      {chosen !== null && !locked && value.length === 0 ? (
+        <Text variant="small" tone="muted">
+          Cochez au moins un bien.
+        </Text>
+      ) : null}
+      {changed && (chosen === null || value.length > 0) ? (
+        <Button label="Enregistrer ses biens" compact onPress={() => onSave(value)} />
+      ) : null}
     </View>
   );
 }

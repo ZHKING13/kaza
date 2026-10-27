@@ -71,6 +71,8 @@ export type OrganizationSummary = {
   type?: 'individual' | 'agency';
   /** Permissions de l'utilisateur dans l'espace ; absentes (ancienne version enregistrée) : celles du rôle */
   permissions?: Permission[];
+  /** Biens confiés (offre Agence) ; null ou absent : tous */
+  propertyIds?: string[] | null;
 };
 
 const toSummary = (o: ApiOrganization): OrganizationSummary => ({
@@ -79,6 +81,7 @@ const toSummary = (o: ApiOrganization): OrganizationSummary => ({
   role: o.role,
   type: o.type,
   permissions: o.permissions,
+  propertyIds: o.propertyIds,
 });
 
 export type Settings = {
@@ -1913,6 +1916,8 @@ export function usePermissions() {
     /** Facturation, équipe, identité et réglages de l'espace */
     isOwner: role === 'owner',
     can: (permission: Permission) => granted.includes(permission),
+    /** Limité à certains biens : le serveur n'envoie que ceux-là, et ne laisse pas en créer */
+    scoped: role !== 'owner' && !!current?.propertyIds?.length,
   };
 }
 
