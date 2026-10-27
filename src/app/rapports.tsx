@@ -232,7 +232,7 @@ export default function Rapports() {
       ) : null}
 
       {locked ? (
-        lockedCard('Le compte rendu par propriétaire est compris dans les offres Pro et Agence.')
+        lockedCard('Le compte rendu par propriétaire est compris dans l’offre Agence.')
       ) : kind === 'releve' || landlord ? (
         <View style={{ gap: space.xs }}>
           <Button label={busy === 'pdf' ? 'Préparation…' : 'Partager le PDF'} icon={FileText} onPress={pdf} disabled={!!busy} />
@@ -245,7 +245,7 @@ export default function Rapports() {
               disabled={!!busy}
             />
           ) : (
-            lockedCard('L’export Excel est compris à partir de l’offre Bailleur.')
+            lockedCard('L’export Excel est compris à partir de l’offre Famille.')
           )}
           {kind === 'proprietaire' && landlord?.phone ? (
             <Button

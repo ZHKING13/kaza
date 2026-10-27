@@ -1,6 +1,9 @@
 /**
- * Offres de Kaza : mêmes valeurs que `plans` de @zhking13/kaza-domain 0.9.0 (le serveur applique les
+ * Offres de Kaza : mêmes valeurs que `plans` de @zhking13/kaza-domain 0.10.0 (le serveur applique les
  * limites ; l'application les affiche).
+ *
+ * En vente : Gratuit, Famille, Agence. Bailleur (`starter`) et Pro ne sont plus vendues : elles restent valables
+ * pour un abonnement déjà payé, jusqu'à son échéance.
  */
 export type PlanId = 'free' | 'starter' | 'family' | 'pro' | 'agency';
 
@@ -21,8 +24,8 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
   free: {
     label: 'Gratuit',
     monthlyPrice: 0,
-    pitch: 'Pour essayer avec quelques logements.',
-    limits: { units: 3, members: 1, messagesPerMonth: 5, onlinePayments: false, branding: false, activityLog: false, exports: false, landlordReports: false },
+    pitch: 'Pour essayer avec votre proche, sur quelques logements.',
+    limits: { units: 3, members: 2, messagesPerMonth: 0, onlinePayments: false, branding: false, activityLog: false, exports: false, landlordReports: false },
   },
   starter: {
     label: 'Bailleur',
@@ -33,8 +36,8 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
   family: {
     label: 'Famille',
     monthlyPrice: 5000,
-    pitch: 'Un proche ou un collecteur encaisse sur place, vous suivez tout de loin.',
-    limits: { units: 10, members: 2, messagesPerMonth: 60, onlinePayments: true, branding: false, activityLog: true, exports: true, landlordReports: false },
+    pitch: 'Pour vous et votre proche : il encaisse sur place, vous suivez tout de loin.',
+    limits: { units: 40, members: 4, messagesPerMonth: 150, onlinePayments: true, branding: false, activityLog: true, exports: true, landlordReports: false },
   },
   pro: {
     label: 'Pro',
@@ -45,12 +48,13 @@ export const plans: Record<PlanId, { label: string; monthlyPrice: number; limits
   agency: {
     label: 'Agence',
     monthlyPrice: 25000,
-    pitch: 'Pour les agences : équipe sans limite, 150 logements.',
+    pitch: 'Pour les agences : équipe sans limite, quittances à vos couleurs, compte rendu par propriétaire.',
     limits: { units: 150, members: null, messagesPerMonth: 1000, onlinePayments: true, branding: true, activityLog: true, exports: true, landlordReports: true },
   },
 };
 
-export const paidPlans: PlanId[] = ['starter', 'family', 'pro', 'agency'];
+/** Offres payables, de la moins chère à la plus chère */
+export const paidPlans: PlanId[] = ['family', 'agency'];
 export const billingMonths = [1, 3, 12] as const;
 export type BillingMonths = (typeof billingMonths)[number];
 

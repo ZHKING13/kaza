@@ -30,8 +30,8 @@ function features(id: PlanId, onlinePayments: boolean): string[] {
       : l.members === 1
         ? 'Vous seul'
         : l.members === 2
-          ? 'Vous et 1 membre (proche ou collecteur)'
-          : `Vous et ${l.members - 1} membres (gérant, collecteur)`,
+          ? 'Vous et 1 collaborateur (proche ou collecteur)'
+          : `Vous et ${l.members - 1} collaborateurs (proche, gérant, collecteur)`,
     paid
       ? `Relances et quittances envoyées automatiquement par Kaza (${formatNumber(l.messagesPerMonth)} / mois)`
       : `Relances depuis votre WhatsApp, ${l.messagesPerMonth} envois par Kaza pour essayer`,
@@ -139,7 +139,7 @@ export default function OffreScreen() {
   const headline = !detail
     ? 'Chargement…'
     : detail.status === 'trial'
-      ? `Essai Pro gratuit : ${detail.daysLeft} jour${(detail.daysLeft ?? 0) > 1 ? 's' : ''} restant${(detail.daysLeft ?? 0) > 1 ? 's' : ''}`
+      ? `Essai ${plans[detail.effectivePlan].label} gratuit : ${detail.daysLeft} jour${(detail.daysLeft ?? 0) > 1 ? 's' : ''} restant${(detail.daysLeft ?? 0) > 1 ? 's' : ''}`
       : detail.status === 'active'
         ? `Offre ${plans[detail.plan].label}, payée jusqu’au ${formatDate(detail.paidUntil!)}`
         : detail.status === 'grace'
@@ -148,11 +148,11 @@ export default function OffreScreen() {
   const hint = !detail
     ? ''
     : detail.status === 'trial'
-      ? `Toutes les fonctions Pro jusqu’au ${formatDate(detail.endsAt!)}. Ensuite, choisissez une offre ; sinon l’espace passe en offre gratuite, sans rien perdre.`
+      ? `Toutes les fonctions de l’offre ${plans[detail.effectivePlan].label} jusqu’au ${formatDate(detail.endsAt!)}. Ensuite, choisissez une offre ; sinon l’espace passe en offre gratuite, sans rien perdre.`
       : detail.status === 'grace'
         ? 'Vos fonctions restent ouvertes pendant 7 jours. Ensuite, l’espace passe en offre gratuite (rien n’est effacé).'
         : detail.status === 'free'
-          ? 'Jusqu’à 3 logements, quittances et relances depuis votre WhatsApp, espace locataire. Pour que Kaza relance et envoie vos quittances à votre place, plus de logements, l’équipe et vos couleurs sur les quittances : choisissez une offre.'
+          ? 'Jusqu’à 3 logements et 1 collaborateur, quittances et relances depuis votre WhatsApp, espace locataire. Pour que Kaza relance et envoie vos quittances à votre place, plus de logements, plus de collaborateurs et le journal : choisissez une offre.'
           : detail.status === 'expired'
           ? 'Vous gardez l’accès à tout pour consulter, encaisser et imprimer vos quittances. Ajouter des logements, l’équipe et les envois par Kaza demandent une offre payante.'
           : 'Vous pouvez prolonger ou changer d’offre à tout moment : les jours déjà payés sont gardés.';
@@ -271,7 +271,7 @@ export default function OffreScreen() {
               <Button
                 label={`${isCurrent ? 'Prolonger' : 'Choisir'} · ${formatAmount(amount)}${months === 12 ? ' / an' : months === 3 ? ' / 3 mois' : ''}`}
                 icon={Wallet}
-                variant={id === 'pro' ? 'primary' : 'secondary'}
+                variant={id === 'family' ? 'primary' : 'secondary'}
                 disabled={busy || !!paying || detail?.billingAvailable === false}
                 onPress={() => choose(id)}
               />

@@ -60,7 +60,7 @@ export function OfferBanner() {
         welcome.daysLeft > 1 ? `plus que ${welcome.daysLeft} jours` : 'dernier jour'
       }.`
     : s.status === 'trial' && (s.daysLeft ?? 99) <= 7
-      ? `Votre essai Pro se termine le ${formatDate(s.endsAt!)}. Choisissez une offre pour garder vos relances et votre équipe.`
+      ? `Votre essai ${plans[s.effectivePlan].label} se termine le ${formatDate(s.endsAt!)}. Choisissez une offre pour garder vos relances et votre équipe.`
       : s.status === 'grace'
         ? `Votre offre ${plans[s.plan].label} est échue. Renouvelez-la avant le ${formatDate(s.endsAt!)}.`
         : (s.status === 'expired' || s.status === 'free') && over

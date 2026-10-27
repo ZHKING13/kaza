@@ -90,10 +90,11 @@ Fonctionnement en mode serveur :
 - **Photos des biens** : réduites et compressées sur le téléphone, envoyées au serveur (file d'envoi hors ligne),
   visibles par toute l'équipe et sur un autre téléphone ; « Changer la photo » sur la fiche du bien (propriétaire,
   gérant). Les photos prises avant cette version sont envoyées à la prochaine connexion.
-- **Offres** (étape 10) : Gratuit (3 logements), Bailleur (3 000 FCFA/mois, 10 logements, messages Kaza, liens de
-  paiement), Famille (5 000, 10 logements, vous et un proche ou un collecteur, journal), Pro (8 000, 40 logements,
-  équipe de 3, quittances à vos couleurs, journal), Agence (25 000, 150 logements,
-  équipe illimitée) ; 12 mois au prix de 10. Essai Pro de 30 jours à la création de l'espace, 7 jours de grâce après
+- **Offres** (étape 10, domaine 0.10.0) : Gratuit (3 logements, vous et 1 collaborateur), Famille (5 000 FCFA/mois,
+  40 logements, vous et 3 collaborateurs, 150 messages Kaza, liens de paiement, journal, export Excel), Agence (25 000,
+  150 logements, équipe illimitée, quittances à vos couleurs, compte rendu par propriétaire) ; 12 mois au prix de 10.
+  Bailleur et Pro ne sont plus vendues (un abonnement déjà payé reste valable jusqu'à son échéance). Essai de 30 jours à
+  la création de l'espace (Famille, ou Agence pour une agence), 7 jours de grâce après
   l'échéance, puis offre gratuite sans rien effacer (consulter, encaisser, imprimer restent possibles). Plus › Mon offre :
   usage (logements, équipe, messages du mois), choix de l'offre et de la durée, paiement par mobile money (page de
   l'agrégateur, l'offre se met à jour d'elle-même), factures PDF. Le paiement est suivi même si l'on quitte l'écran ou l'application : un message bref confirme l'offre
@@ -116,7 +117,7 @@ Fonctionnement en mode serveur :
 - **Propriétaire du bien (mandant)** : pour une agence, sur la fiche du bien, nom, numéro et commission de gestion (%).
 - **Rapports et exports** (Plus › Rapports et exports) : relevé de gestion (période : ce mois, mois dernier, 3 derniers
   mois, cette année, année dernière ; tous les biens ou certains) en PDF aux couleurs de l'espace, et en Excel (synthèse,
-  mois par mois, paiements, dépenses ; à partir de l'offre Bailleur). Compte rendu par propriétaire (Pro, Agence) :
+  mois par mois, paiements, dépenses ; à partir de l'offre Famille). Compte rendu par propriétaire (Agence) :
   encaissé − commission − dépenses = montant dû, loyers encaissés, dépenses, mois par mois ; résumé envoyé par WhatsApp.
   Calcul partagé avec l'API (`buildReport`, domaine 0.7.0), sur le téléphone, hors ligne compris.
 - **Mises à jour sans passer par les stores** (EAS Update) : la nouvelle version se télécharge en arrière-plan et
