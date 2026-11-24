@@ -689,11 +689,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const lastLoad = useRef(0);
   const loadRemote = async (organizationId: string) => {
     const data = await remote.snapshot(organizationId, new Date());
     // Des écritures attendent encore d'être envoyées : le serveur ne les connaît pas, on garde le téléphone
     if (stateRef.current.outbox.length > 0) return;
     const merged = data.identity ? mergeIdentity(stateRef.current.identity, data.identity) : null;
+    lastLoad.current = Date.now();
     dispatch({ type: 'remoteLoaded', data, syncedAt: new Date().toISOString() });
     if (data.identity && merged) void fetchIdentityImages(data.identity, merged);
   };
@@ -813,10 +815,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.hydrated]);
 
-  // Retour dans l'application ou du réseau (web) : nouvelle tentative
+  // Retour dans l'application ou du réseau (web) : nouvelle tentative, sinon relecture du serveur si elle date d'au
+  // moins une minute (paiements signalés, encaissements d'un collègue… sans attendre une notification)
   useEffect(() => {
     const retry = () => {
-      if (stateRef.current.outbox.length > 0) void flushRef.current();
+      const s = stateRef.current;
+      if (s.outbox.length > 0) void flushRef.current();
+      else if (s.remote && s.session && s.organizationId && Date.now() - lastLoad.current > 60_000) {
+        loadRemote(s.organizationId).catch(() => {});
+      }
     };
     const sub = AppState.addEventListener('change', (s) => s === 'active' && retry());
     if (Platform.OS === 'web') globalThis.addEventListener?.('online', retry);

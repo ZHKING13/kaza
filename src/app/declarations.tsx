@@ -1,7 +1,7 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Check, Hand, X } from 'lucide-react-native';
-import { useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { Image, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
@@ -91,14 +91,37 @@ function DeclarationCard({ d, onReject }: { d: PaymentDeclaration; onReject: () 
 
 export default function Declarations() {
   const { c } = useTheme();
-  const { declarations, rejectDeclaration } = useStore();
+  const { declarations, rejectDeclaration, refresh } = useStore();
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const [refreshing, setRefreshing] = useState(false);
+  // Les paiements signalés arrivent du serveur : relecture à chaque ouverture de l'écran
+  useFocusEffect(
+    useCallback(() => {
+      refreshRef.current().catch(() => {});
+    }, []),
+  );
   const [rejecting, setRejecting] = useState<PaymentDeclaration | null>(null);
   const [reason, setReason] = useState(REJECT_REASONS[0]);
   const [other, setOther] = useState('');
   const sorted = [...declarations].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return (
-    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.md, gap: space.md, paddingBottom: space.xxl }}>
+    <ScrollView
+      style={{ backgroundColor: c.bg }}
+      contentContainerStyle={{ padding: space.md, gap: space.md, paddingBottom: space.xxl }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          tintColor={c.primary}
+          colors={[c.primary]}
+          onRefresh={async () => {
+            setRefreshing(true);
+            await refreshRef.current().catch(() => {});
+            setRefreshing(false);
+          }}
+        />
+      }>
       {sorted.length === 0 ? (
         <EmptyState
           icon={Hand}
