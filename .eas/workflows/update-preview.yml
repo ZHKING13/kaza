@@ -1,0 +1,13 @@
+name: Mise à jour de l'APK de préversion
+
+# Publie le code JavaScript de la branche sur le canal preview (APK de test installés), sans nouveau build.
+# À lancer à la main depuis expo.dev ; ne remplace pas un build si le code natif a changé.
+on: {}
+
+jobs:
+  update:
+    name: Mise à jour preview
+    type: update
+    environment: preview
+    params:
+      channel: preview
