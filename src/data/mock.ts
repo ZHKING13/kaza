@@ -91,7 +91,27 @@ export function demoTenants(today: Date): Tenant[] {
   const at = (months: number, days = 0) =>
     new Date(today.getFullYear(), today.getMonth() + months, today.getDate() + days, 12).toISOString();
   return tenants.map((x) => {
-    if (x.id === 't2') return { ...x, entryDate: at(-26) };
+    if (x.id === 't2')
+      return {
+        ...x,
+        entryDate: at(-26),
+        advanceMonths: 2,
+        contract: {
+          usage: 'habitation' as const,
+          tenant: { idType: 'cni' as const, idNumber: 'CI0012345678', profession: 'Infirmière' },
+          terms: {
+            activity: null,
+            electricity: 'tenant_meter' as const,
+            water: 'shared' as const,
+            chargesFixed: null,
+            otherCharges: 'Ordures ménagères : 2 000 FCFA par mois',
+            guarantor: null,
+            specialClauses: null,
+            signaturePlace: 'Abidjan',
+          },
+          pages: [],
+        },
+      };
     if (x.id === 't3') return { ...x, entryDate: at(-11, -20), endDate: at(1, 10) };
     if (x.id === 't6')
       return { ...x, entryDate: at(-8), notice: { from: 'tenant' as const, date: at(0, -5), exitDate: at(1, -5), reason: 'Mutation' } };

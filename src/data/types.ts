@@ -37,6 +37,8 @@ export type Tenant = {
   dueDay: number;
   /** Mois d'avance encore à consommer */
   advanceMonthsLeft: number;
+  /** Mois d'avance versés à l'entrée (contrat de bail) */
+  advanceMonths?: number;
   /** Caution versée à l'entrée, en mois de loyer (remboursable) */
   depositMonths: number;
   /** Date d'entrée dans le logement (ISO) */
@@ -54,6 +56,33 @@ export type Tenant = {
   settlement?: Settlement;
   /** Lien de l'espace locataire (compte en ligne, bail en cours) */
   portalUrl?: string;
+  /** Contrat de bail : usage, identité du locataire, charges, garant, clauses, pages du contrat signé */
+  contract?: LeaseContract;
+};
+
+export type LeaseUsage = 'habitation' | 'professional';
+export type ChargeMode = 'tenant_meter' | 'shared' | 'included';
+export type IdType = 'cni' | 'passport' | 'consular_card' | 'residence_permit' | 'driving_licence' | 'other';
+
+export type LeaseContractTerms = {
+  activity: string | null;
+  electricity: ChargeMode | null;
+  water: ChargeMode | null;
+  chargesFixed: number | null;
+  otherCharges: string | null;
+  guarantor: { name: string; phone: string | null; idType: IdType | null; idNumber: string | null } | null;
+  specialClauses: string | null;
+  signaturePlace: string | null;
+};
+
+/** Page du contrat papier signé : lien signé (serveur) ou image locale en attente d'envoi */
+export type ContractPage = { id: string; contentType: string; url: string | null; pending?: boolean };
+
+export type LeaseContract = {
+  usage: LeaseUsage;
+  tenant: { idType: IdType | null; idNumber: string | null; profession: string | null };
+  terms: LeaseContractTerms;
+  pages: ContractPage[];
 };
 
 /** Révision du loyer : `amount` à partir du mois `from` ("YYYY-MM"). */

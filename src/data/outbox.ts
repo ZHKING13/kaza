@@ -5,6 +5,7 @@ import type { LeaseSettings } from './rent';
 import {
   type ApiOrganization,
   type AllocationBody,
+  type ContractBody,
   type DepartureBody,
   type ExpenseBody,
   type ExpenseUpdateBody,
@@ -67,6 +68,11 @@ export type OutboxOp =
   | { kind: 'voidExpense'; orgId: string; expenseId: string; reason: string }
   | { kind: 'stopExpenseSchedule'; orgId: string; scheduleId: string }
   | { kind: 'updateLandlord'; orgId: string; propertyId: string; body: LandlordBody }
+  /** Contrat de bail (usage, identité, charges, garant, clauses) */
+  | { kind: 'updateContract'; orgId: string; leaseId: string; body: ContractBody }
+  /** Page du contrat signé photographiée ; `uri` : data URI, gardée jusqu'à l'envoi */
+  | { kind: 'addContractPage'; orgId: string; leaseId: string; localId: string; uri: string }
+  | { kind: 'removeContractPage'; orgId: string; leaseId: string; documentId: string }
   /** Paiement signalé par un locataire, refusé (argent pas reçu) */
   | { kind: 'rejectDeclaration'; orgId: string; declarationId: string; reason: string };
 
@@ -172,6 +178,15 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       return { kind: 'done' };
     case 'rejectDeclaration':
       await remote.rejectDeclaration(entry.orgId, entry.declarationId, entry.reason);
+      return { kind: 'done' };
+    case 'updateContract':
+      await remote.updateContract(entry.orgId, entry.leaseId, entry.body);
+      return { kind: 'done' };
+    case 'addContractPage':
+      await remote.addContractPage(entry.orgId, entry.leaseId, entry.uri);
+      return { kind: 'done' };
+    case 'removeContractPage':
+      await remote.removeContractPage(entry.orgId, entry.leaseId, entry.documentId);
       return { kind: 'done' };
   }
 }

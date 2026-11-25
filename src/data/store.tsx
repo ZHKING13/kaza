@@ -49,8 +49,10 @@ import {
 import { allocatePayment, leaseMonths, type LeaseMonth } from './allocation';
 import { buildReport, type Report } from './report';
 import type {
+  ContractPage,
   Expense,
   ExpenseSchedule,
+  LeaseContract,
   Notice,
   Payment,
   PaymentDeclaration,
@@ -63,6 +65,23 @@ import type {
   TenantSummary,
   Unit,
 } from './types';
+
+/** Contrat vierge : habitation, rien de rempli */
+export const emptyContract = (): LeaseContract => ({
+  usage: 'habitation',
+  tenant: { idType: null, idNumber: null, profession: null },
+  terms: {
+    activity: null,
+    electricity: null,
+    water: null,
+    chargesFixed: null,
+    otherCharges: null,
+    guarantor: null,
+    specialClauses: null,
+    signaturePlace: null,
+  },
+  pages: [],
+});
 
 export type OrganizationSummary = {
   id: string;
@@ -456,6 +475,11 @@ type Store = State & {
   cancelRentRevision: (tenantId: string, revisionId: string) => Promise<void>;
   /** Fin du contrat (ISO), ou null : durée indéterminée */
   setEndDate: (tenantId: string, endDate: string | null) => Promise<void>;
+  /** Contrat de bail : usage, identité du locataire, charges, garant, clauses */
+  updateContract: (tenantId: string, contract: Omit<LeaseContract, 'pages'>) => Promise<void>;
+  /** Page du contrat papier signé ; `uri` : photo compressée (data URI) */
+  addContractPage: (tenantId: string, uri: string) => Promise<void>;
+  removeContractPage: (tenantId: string, pageId: string) => Promise<void>;
   /** Enregistre un préavis (Kaza ne le signifie pas au locataire) */
   giveNotice: (tenantId: string, notice: Notice) => Promise<void>;
   withdrawNotice: (tenantId: string) => Promise<void>;
@@ -1298,7 +1322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           period,
         }));
         const apply = () =>
-          dispatch({ type: 'addTenant', tenant: { ...rest, id, rent, rents: [], advanceMonthsLeft: advanceMonths }, rent, payments });
+          dispatch({ type: 'addTenant', tenant: { ...rest, id, rent, rents: [], advanceMonthsLeft: advanceMonths, advanceMonths }, rent, payments });
         if (online) {
           const orgId = await ensureOrganization();
           await write(
@@ -1418,6 +1442,80 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               leaseId: tenantId,
               revisionId,
               label: `Révision du loyer retirée (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      updateContract: async (tenantId, contract) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const pages = tenant.contract?.pages ?? [];
+        const apply = () => dispatch({ type: 'updateTenant', tenantId, patch: { contract: { ...contract, pages } } });
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'updateContract',
+              orgId,
+              leaseId: tenantId,
+              body: contract,
+              label: `Contrat de bail de ${tenant.firstName} ${tenant.lastName}`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      addContractPage: async (tenantId, uri) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const localId = newId();
+        const page: ContractPage = { id: localId, contentType: 'image/jpeg', url: uri, pending: online };
+        const apply = () => {
+          const current = stateRef.current.tenants.find((t) => t.id === tenantId)?.contract ?? emptyContract();
+          dispatch({ type: 'updateTenant', tenantId, patch: { contract: { ...current, pages: [...current.pages, page] } } });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'addContractPage',
+              orgId,
+              leaseId: tenantId,
+              localId,
+              uri,
+              label: `Page du contrat signé (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          // Envoyée tout de suite : le serveur donne son identifiant et son lien à la page
+          if (stateRef.current.outbox.length === 0) await loadRemote(orgId).catch(() => {});
+          return;
+        }
+        apply();
+      },
+      removeContractPage: async (tenantId, pageId) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const apply = () => {
+          const current = stateRef.current.tenants.find((t) => t.id === tenantId)?.contract;
+          if (!current) return;
+          dispatch({
+            type: 'updateTenant',
+            tenantId,
+            patch: { contract: { ...current, pages: current.pages.filter((p) => p.id !== pageId) } },
+          });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'removeContractPage',
+              orgId,
+              leaseId: tenantId,
+              documentId: pageId,
+              label: `Page du contrat retirée (${tenant.firstName} ${tenant.lastName})`,
             },
             apply,
           );

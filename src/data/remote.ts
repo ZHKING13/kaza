@@ -10,6 +10,9 @@ import type {
   ExpenseCategory,
   ExpenseMethod,
   ExpenseSchedule,
+  LeaseContract,
+  LeaseContractTerms,
+  LeaseUsage,
   Payment,
   PaymentDeclaration,
   PaymentMethod,
@@ -255,7 +258,25 @@ type ApiLease = {
   settlement: ApiSettlement | null;
   /** Lien de l'espace locataire ; null après le départ */
   tenantLink?: string | null;
+  /** Contrat de bail ; null pour qui ne gère pas les baux */
+  contract?: ApiLeaseContract | null;
 };
+
+export type ApiLeaseContract = {
+  usage: LeaseUsage;
+  tenant: LeaseContract['tenant'];
+  terms: LeaseContractTerms;
+  documents: { id: string; kind: 'signed_contract'; contentType: string; url: string | null; createdAt: string }[];
+};
+
+export type ContractBody = Omit<ApiLeaseContract, 'documents'>;
+
+export const toContract = (c: ApiLeaseContract): LeaseContract => ({
+  usage: c.usage,
+  tenant: c.tenant,
+  terms: c.terms,
+  pages: c.documents.map((d) => ({ id: d.id, contentType: d.contentType, url: d.url })),
+});
 
 type ApiDeclaration = {
   id: string;
@@ -434,6 +455,8 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
       : undefined,
     settlement: l.settlement ? toSettlement(l.settlement) : undefined,
     portalUrl: l.tenantLink ?? undefined,
+    contract: l.contract ? toContract(l.contract) : undefined,
+    advanceMonths: l.advanceMonths,
     advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
   }));
   // Loyer du mois en cours des baux actifs, par unité
@@ -607,6 +630,21 @@ export const remote = {
   /** Refuse un paiement signalé par un locataire (le motif s'affiche dans son espace) */
   rejectDeclaration: (orgId: string, declarationId: string, reason: string) =>
     api.post<ApiDeclaration>(`/user/organizations/${orgId}/payment-declarations/${declarationId}/reject`, { reason }),
+
+  /** Contrat de bail : usage, identité du locataire, charges, garant, clauses */
+  updateContract: (orgId: string, leaseId: string, body: ContractBody) =>
+    api.put<ApiLeaseContract>(`/user/organizations/${orgId}/leases/${leaseId}/contract`, body),
+
+  /** Page du contrat papier signé (photo) ; `uri` : data URI ou fichier local */
+  addContractPage: async (orgId: string, leaseId: string, uri: string) =>
+    api.upload<ApiLeaseContract['documents'][number]>(
+      'POST',
+      `/user/organizations/${orgId}/leases/${leaseId}/documents`,
+      await imageForm(uri, 'contrat'),
+    ),
+
+  removeContractPage: (orgId: string, leaseId: string, documentId: string) =>
+    api.delete<void>(`/user/organizations/${orgId}/leases/${leaseId}/documents/${documentId}`),
 
   /** Nouveau lien de l'espace locataire ; l'ancien ne fonctionne plus */
   regenerateTenantLink: (orgId: string, leaseId: string) =>

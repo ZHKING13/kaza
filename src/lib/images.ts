@@ -37,6 +37,23 @@ export async function pickImage({ maxSide, format, aspect }: PickOptions): Promi
   return `data:image/${format};base64,${out.base64}`;
 }
 
+/** Photo prise avec l'appareil (page d'un contrat, état des lieux) ; null si annulé ou refusé. */
+export async function takePhoto({ maxSide, format }: PickOptions): Promise<string | null> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) throw new Error('camera');
+  const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+  if (res.canceled) return null;
+  const { uri, width, height } = res.assets[0];
+  const longest = Math.max(width || 0, height || 0);
+  const resize = longest > maxSide ? [{ resize: width >= height ? { width: maxSide } : { height: maxSide } }] : [];
+  const out = await manipulateAsync(uri, resize, {
+    compress: format === 'jpeg' ? 0.7 : 1,
+    format: format === 'png' ? SaveFormat.PNG : SaveFormat.JPEG,
+    base64: true,
+  });
+  return `data:image/${format};base64,${out.base64}`;
+}
+
 const typeOf = (uri: string) => (uri.startsWith('data:image/png') || uri.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
 /** Corps multipart (champ `file`) d'une image : data URI, fichier local, ou lien. */
