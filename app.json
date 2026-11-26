@@ -87,7 +87,7 @@
       "typedRoutes": true
     },
     "runtimeVersion": {
-      "policy": "fingerprint"
+      "policy": "appVersion"
     },
     "updates": {
       "checkAutomatically": "ON_LOAD",
