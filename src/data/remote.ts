@@ -10,6 +10,8 @@ import type {
   ExpenseCategory,
   ExpenseMethod,
   ExpenseSchedule,
+  Inspection,
+  InspectionKind,
   LeaseContract,
   LeaseContractTerms,
   LeaseUsage,
@@ -260,6 +262,20 @@ type ApiLease = {
   tenantLink?: string | null;
   /** Contrat de bail ; null pour qui ne gère pas les baux */
   contract?: ApiLeaseContract | null;
+  /** États des lieux ; vide pour qui ne gère pas les baux */
+  inspections?: ApiInspection[];
+};
+
+export type ApiInspection = Omit<Inspection, 'photos'> & { photos: { id: string; url: string | null; contentType: string; createdAt: string }[] };
+
+/** Corps envoyé : l'état des lieux sans ses photos (envoyées une à une) ni sa date de signature (posée par le serveur) */
+export type InspectionBody = Omit<Inspection, 'kind' | 'photos' | 'signedAt'>;
+
+export const toInspection = (i: ApiInspection): Inspection => ({ ...i, photos: i.photos.map((p) => ({ id: p.id, url: p.url })) });
+
+export const inspectionBody = (i: Inspection): InspectionBody => {
+  const { kind: _kind, photos: _photos, signedAt: _signedAt, ...body } = i;
+  return body;
 };
 
 export type ApiLeaseContract = {
@@ -456,6 +472,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
     settlement: l.settlement ? toSettlement(l.settlement) : undefined,
     portalUrl: l.tenantLink ?? undefined,
     contract: l.contract ? toContract(l.contract) : undefined,
+    inspections: Object.fromEntries((l.inspections ?? []).map((i) => [i.kind, toInspection(i)])),
     advanceMonths: l.advanceMonths,
     advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
   }));
@@ -642,6 +659,20 @@ export const remote = {
       `/user/organizations/${orgId}/leases/${leaseId}/documents`,
       await imageForm(uri, 'contrat'),
     ),
+
+  /** État des lieux entier, toujours avec le même identifiant */
+  saveInspection: (orgId: string, leaseId: string, kind: InspectionKind, body: InspectionBody) =>
+    api.put<ApiInspection>(`/user/organizations/${orgId}/leases/${leaseId}/inspections/${kind}`, body),
+
+  /** Photo d'un état des lieux, sous l'identifiant choisi par le téléphone ; `uri` : data URI ou fichier local */
+  addInspectionPhoto: async (orgId: string, leaseId: string, kind: InspectionKind, photoId: string, uri: string) => {
+    const form = await imageForm(uri, `edl-${photoId}`);
+    form.append('id', photoId);
+    return api.upload<ApiInspection['photos'][number]>('POST', `/user/organizations/${orgId}/leases/${leaseId}/inspections/${kind}/photos`, form);
+  },
+
+  removeInspectionPhoto: (orgId: string, leaseId: string, kind: InspectionKind, photoId: string) =>
+    api.delete<void>(`/user/organizations/${orgId}/leases/${leaseId}/inspections/${kind}/photos/${photoId}`),
 
   removeContractPage: (orgId: string, leaseId: string, documentId: string) =>
     api.delete<void>(`/user/organizations/${orgId}/leases/${leaseId}/documents/${documentId}`),

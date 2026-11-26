@@ -71,6 +71,8 @@ export function describeActivity(e: ActivityEntry): string {
       return `${who} a ajouté une page du contrat signé de ${subject}`;
     case 'lease.document_removed':
       return `${who} a retiré une page du contrat signé de ${subject}`;
+    case 'lease.inspection_saved':
+      return `${who} a ${d.signed ? 'signé' : 'enregistré'} l’état des lieux ${d.kind === 'exit' ? 'de sortie' : 'd’entrée'} de ${subject}`;
     case 'organization.identity_updated': {
       const fields = Array.isArray(d.fields) ? (d.fields as string[]) : [];
       if (fields.includes('logo')) return `${who} a ${d.removed ? 'retiré' : 'changé'} le logo des quittances`;

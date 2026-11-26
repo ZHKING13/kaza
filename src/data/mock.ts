@@ -1,4 +1,5 @@
 import { periodOf } from '@/lib/format';
+import { newInspection } from '@/lib/inspection';
 
 import type { TeamMember } from './remote';
 
@@ -86,6 +87,25 @@ export const tenants: Tenant[] = [
   t('t17', 'Boutique', 'Chez Tanti', '+2250511223344', 'l18', 10),
 ];
 
+/** Démo : état des lieux d'entrée signé (Koffi), pour montrer la comparaison à la sortie */
+function demoEntryInspection(date: string) {
+  const base = newInspection('00000000-0000-4000-8000-000000000006', 'entry', 'immeuble', date);
+  const sig = 'M20 90 Q60 20 100 80 T180 70 L230 60 M240 40 L260 100';
+  return {
+    ...base,
+    rooms: base.rooms.map((r, i) => ({
+      ...r,
+      items: r.items.map((it, j) => ({ ...it, condition: (i + j) % 4 === 0 ? ('new' as const) : ('good' as const) })),
+    })),
+    meters: { electricity: { number: 'CIE 4410 2231', index: '18 452', photoId: null }, water: { number: 'SODECI 77 120', index: '1 204', photoId: null } },
+    keys: { unit: 2, gate: 1, other: 'Badge parking' },
+    observations: 'Peinture du séjour refaite avant l’entrée.',
+    landlordSignature: sig,
+    tenantSignature: 'M30 80 L70 40 L90 100 L130 50 Q170 30 210 90',
+    signedAt: date,
+  };
+}
+
 /** Démo : quelques baux datés, pour montrer les alertes de fin de contrat et de révision. */
 export function demoTenants(today: Date): Tenant[] {
   const at = (months: number, days = 0) =>
@@ -114,7 +134,12 @@ export function demoTenants(today: Date): Tenant[] {
       };
     if (x.id === 't3') return { ...x, entryDate: at(-11, -20), endDate: at(1, 10) };
     if (x.id === 't6')
-      return { ...x, entryDate: at(-8), notice: { from: 'tenant' as const, date: at(0, -5), exitDate: at(1, -5), reason: 'Mutation' } };
+      return {
+        ...x,
+        entryDate: at(-8),
+        notice: { from: 'tenant' as const, date: at(0, -5), exitDate: at(1, -5), reason: 'Mutation' },
+        inspections: { entry: demoEntryInspection(at(-8).slice(0, 10)) },
+      };
     return x;
   });
 }

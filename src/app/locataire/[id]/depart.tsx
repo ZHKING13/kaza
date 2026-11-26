@@ -58,7 +58,10 @@ export default function DepartLocataire() {
     return planned && planned < noon ? planned : noon;
   });
   const [deductArrears, setDeductArrears] = useState(true);
-  const [deductions, setDeductions] = useState<Deduction[]>([]);
+  // Retenues chiffrées dans l'état des lieux de sortie, reprises telles quelles (modifiables)
+  const [deductions, setDeductions] = useState<Deduction[]>(() =>
+    (tenant?.inspections?.exit?.deductions ?? []).map((d, i) => ({ key: `edl${i}`, label: d.label, amount: d.amount })),
+  );
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>('cash');
   const [done, setDone] = useState<Settlement | null>(null);
   const [confirming, setConfirming] = useState(false);

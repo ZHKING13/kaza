@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { KazaMessages } from '@/components/KazaMessages';
+import { InspectionCard } from '@/components/InspectionCard';
 import { LeaseContractCard } from '@/components/LeaseContractCard';
 import { LeaseEndBanner, LeaseTerms } from '@/components/LeaseTerms';
 import { OnlinePayment } from '@/components/OnlinePayment';
@@ -255,6 +256,7 @@ export default function LocataireDetail() {
         <LeaseTerms tenant={tenant} unit={unit} canManage={canManage} />
 
         {canManage ? <LeaseContractCard tenant={tenant} /> : null}
+        {canManage ? <InspectionCard tenant={tenant} /> : null}
 
         <TenantSpace tenant={tenant} />
 

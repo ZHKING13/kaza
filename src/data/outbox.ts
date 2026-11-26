@@ -6,6 +6,7 @@ import {
   type ApiOrganization,
   type AllocationBody,
   type ContractBody,
+  type InspectionBody,
   type DepartureBody,
   type ExpenseBody,
   type ExpenseUpdateBody,
@@ -21,7 +22,7 @@ import {
   type RentRevisionBody,
   type UnitBody,
 } from './remote';
-import type { Payment, PayoutMethod, Settlement } from './types';
+import type { InspectionKind, Payment, PayoutMethod, Settlement } from './types';
 
 /**
  * File d'envoi : écritures faites sans réseau (ou pendant qu'une panne serveur dure), gardées sur le
@@ -73,6 +74,11 @@ export type OutboxOp =
   /** Page du contrat signé photographiée ; `uri` : data URI, gardée jusqu'à l'envoi */
   | { kind: 'addContractPage'; orgId: string; leaseId: string; localId: string; uri: string }
   | { kind: 'removeContractPage'; orgId: string; leaseId: string; documentId: string }
+  /** État des lieux entier (rejouable : même identifiant) */
+  | { kind: 'saveInspection'; orgId: string; leaseId: string; inspection: InspectionKind; body: InspectionBody }
+  /** Photo d'un état des lieux, envoyée après l'état des lieux lui-même (ordre de la file) */
+  | { kind: 'addInspectionPhoto'; orgId: string; leaseId: string; inspection: InspectionKind; photoId: string; uri: string }
+  | { kind: 'removeInspectionPhoto'; orgId: string; leaseId: string; inspection: InspectionKind; photoId: string }
   /** Paiement signalé par un locataire, refusé (argent pas reçu) */
   | { kind: 'rejectDeclaration'; orgId: string; declarationId: string; reason: string };
 
@@ -187,6 +193,15 @@ export async function sendOutboxEntry(entry: OutboxEntry): Promise<OutboxResult>
       return { kind: 'done' };
     case 'removeContractPage':
       await remote.removeContractPage(entry.orgId, entry.leaseId, entry.documentId);
+      return { kind: 'done' };
+    case 'saveInspection':
+      await remote.saveInspection(entry.orgId, entry.leaseId, entry.inspection, entry.body);
+      return { kind: 'done' };
+    case 'addInspectionPhoto':
+      await remote.addInspectionPhoto(entry.orgId, entry.leaseId, entry.inspection, entry.photoId, entry.uri);
+      return { kind: 'done' };
+    case 'removeInspectionPhoto':
+      await remote.removeInspectionPhoto(entry.orgId, entry.leaseId, entry.inspection, entry.photoId);
       return { kind: 'done' };
   }
 }

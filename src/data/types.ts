@@ -58,6 +58,45 @@ export type Tenant = {
   portalUrl?: string;
   /** Contrat de bail : usage, identité du locataire, charges, garant, clauses, pages du contrat signé */
   contract?: LeaseContract;
+  /** États des lieux d'entrée et de sortie */
+  inspections?: Partial<Record<InspectionKind, Inspection>>;
+};
+
+export type InspectionKind = 'entry' | 'exit';
+export type InspectionCondition = 'new' | 'good' | 'worn' | 'bad' | 'missing';
+
+export type InspectionItem = {
+  id: string;
+  label: string;
+  condition: InspectionCondition | null;
+  comment: string | null;
+  photoIds: string[];
+};
+
+export type InspectionRoom = { id: string; name: string; items: InspectionItem[] };
+
+export type InspectionMeter = { number: string | null; index: string | null; photoId: string | null } | null;
+
+export type InspectionDeduction = { roomId: string | null; itemId: string | null; label: string; amount: number };
+
+/** Photo d'un état des lieux : lien signé (serveur) ou image locale en attente d'envoi */
+export type InspectionPhoto = { id: string; url: string | null; pending?: boolean };
+
+export type Inspection = {
+  id: string;
+  kind: InspectionKind;
+  /** "YYYY-MM-DD" */
+  date: string;
+  rooms: InspectionRoom[];
+  meters: { electricity: InspectionMeter; water: InspectionMeter };
+  keys: { unit: number | null; gate: number | null; other: string | null };
+  observations: string | null;
+  deductions: InspectionDeduction[];
+  /** Tracés SVG des signatures dessinées à l'écran */
+  landlordSignature: string | null;
+  tenantSignature: string | null;
+  signedAt: string | null;
+  photos: InspectionPhoto[];
 };
 
 export type LeaseUsage = 'habitation' | 'professional';

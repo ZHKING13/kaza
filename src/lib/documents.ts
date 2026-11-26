@@ -108,6 +108,7 @@ export function page(title: string, body: string, brand: Branding = null) {
   table.grid th:first-child, table.grid td:first-child { text-align: left; padding-left: 0; }
   table.grid td { text-align: right; padding: 5px 0 5px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   table.grid td.t { text-align: left; white-space: normal; }
+  table.grid th.l { text-align: left; }
   table.grid tr.total td { font-weight: 700; font-size: 12px; }
   .neg { color: #B91C1C; }
   .avoid { page-break-inside: avoid; }

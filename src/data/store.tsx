@@ -40,6 +40,7 @@ import {
   type ApiUser,
   calendarDate,
   type IdentityFields,
+  inspectionBody,
   type MessagingSettings,
   type ReceivedInvitation,
   remote,
@@ -50,6 +51,8 @@ import { allocatePayment, leaseMonths, type LeaseMonth } from './allocation';
 import { buildReport, type Report } from './report';
 import type {
   ContractPage,
+  Inspection,
+  InspectionKind,
   Expense,
   ExpenseSchedule,
   LeaseContract,
@@ -480,6 +483,11 @@ type Store = State & {
   /** Page du contrat papier signé ; `uri` : photo compressée (data URI) */
   addContractPage: (tenantId: string, uri: string) => Promise<void>;
   removeContractPage: (tenantId: string, pageId: string) => Promise<void>;
+  /** État des lieux d'entrée ou de sortie, enregistré en entier (ses photos gardées telles quelles) */
+  saveInspection: (tenantId: string, inspection: Inspection) => Promise<void>;
+  /** Photo d'un état des lieux déjà enregistré ; renvoie son identifiant (à mettre dans la pièce) */
+  addInspectionPhoto: (tenantId: string, kind: InspectionKind, uri: string) => Promise<string>;
+  removeInspectionPhoto: (tenantId: string, kind: InspectionKind, photoId: string) => Promise<void>;
   /** Enregistre un préavis (Kaza ne le signifie pas au locataire) */
   giveNotice: (tenantId: string, notice: Notice) => Promise<void>;
   withdrawNotice: (tenantId: string) => Promise<void>;
@@ -1516,6 +1524,113 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               leaseId: tenantId,
               documentId: pageId,
               label: `Page du contrat retirée (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      saveInspection: async (tenantId, inspection) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const apply = () => {
+          const current = stateRef.current.tenants.find((t) => t.id === tenantId)!;
+          const photos = current.inspections?.[inspection.kind]?.photos ?? inspection.photos;
+          dispatch({
+            type: 'updateTenant',
+            tenantId,
+            // Signé quand les deux parties ont signé (le serveur garde sa propre date)
+            patch: {
+              inspections: {
+                ...current.inspections,
+                [inspection.kind]: {
+                  ...inspection,
+                  photos,
+                  signedAt:
+                    inspection.landlordSignature && inspection.tenantSignature ? (inspection.signedAt ?? new Date().toISOString().slice(0, 10)) : null,
+                },
+              },
+            },
+          });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'saveInspection',
+              orgId,
+              leaseId: tenantId,
+              inspection: inspection.kind,
+              body: inspectionBody(inspection),
+              label: `État des lieux ${inspection.kind === 'entry' ? 'd’entrée' : 'de sortie'} (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          return;
+        }
+        apply();
+      },
+      addInspectionPhoto: async (tenantId, kind, uri) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const photoId = newId();
+        const apply = () => {
+          const current = stateRef.current.tenants.find((t) => t.id === tenantId)!;
+          const inspection = current.inspections?.[kind];
+          if (!inspection) return;
+          dispatch({
+            type: 'updateTenant',
+            tenantId,
+            patch: {
+              inspections: {
+                ...current.inspections,
+                [kind]: { ...inspection, photos: [...inspection.photos, { id: photoId, url: uri, pending: online }] },
+              },
+            },
+          });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'addInspectionPhoto',
+              orgId,
+              leaseId: tenantId,
+              inspection: kind,
+              photoId,
+              uri,
+              label: `Photo de l’état des lieux (${tenant.firstName} ${tenant.lastName})`,
+            },
+            apply,
+          );
+          return photoId;
+        }
+        apply();
+        return photoId;
+      },
+      removeInspectionPhoto: async (tenantId, kind, photoId) => {
+        const tenant = state.tenants.find((t) => t.id === tenantId)!;
+        const apply = () => {
+          const current = stateRef.current.tenants.find((t) => t.id === tenantId)!;
+          const inspection = current.inspections?.[kind];
+          if (!inspection) return;
+          dispatch({
+            type: 'updateTenant',
+            tenantId,
+            patch: {
+              inspections: { ...current.inspections, [kind]: { ...inspection, photos: inspection.photos.filter((x) => x.id !== photoId) } },
+            },
+          });
+        };
+        if (online) {
+          const orgId = await ensureOrganization();
+          await write(
+            {
+              kind: 'removeInspectionPhoto',
+              orgId,
+              leaseId: tenantId,
+              inspection: kind,
+              photoId,
+              label: `Photo retirée de l’état des lieux (${tenant.firstName} ${tenant.lastName})`,
             },
             apply,
           );
