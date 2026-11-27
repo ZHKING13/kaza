@@ -64,6 +64,7 @@ import type {
   Property,
   RentRevision,
   Settlement,
+  SignatureRequest,
   Tenant,
   TenantSummary,
   Unit,
@@ -525,6 +526,11 @@ type Store = State & {
   rejectDeclaration: (declarationId: string, reason: string) => Promise<void>;
   /** Nouveau lien de l'espace locataire (réseau nécessaire) ; l'ancien ne fonctionne plus */
   regenerateTenantLink: (tenantId: string) => Promise<string>;
+  /** Signature électronique à distance (compte en ligne, offres payantes) : envoie le contrat, renvoie la demande */
+  requestSignature: (tenantId: string, html: string, landlordSignature: string) => Promise<SignatureRequest>;
+  cancelSignature: (tenantId: string) => Promise<void>;
+  /** Contrat de la dernière demande : tel qu'envoyé, ou signé avec le certificat */
+  signatureDocument: (tenantId: string) => Promise<string>;
   /** Relance tout de suite l'envoi des écritures en attente */
   retryOutbox: () => void;
   dismissOutboxFailures: () => void;
@@ -1161,6 +1167,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return;
         }
         apply();
+      },
+      requestSignature: async (tenantId, html, landlordSignature) => {
+        if (!online || !organizationRef.current) {
+          throw new Error('La signature à distance demande un compte Kaza en ligne.');
+        }
+        const request = await remote.requestSignature(organizationRef.current, tenantId, { id: newId(), html, landlordSignature });
+        dispatch({ type: 'updateTenant', tenantId, patch: { signatureRequest: request } });
+        return request;
+      },
+      cancelSignature: async (tenantId) => {
+        const request = stateRef.current.tenants.find((t) => t.id === tenantId)?.signatureRequest;
+        if (!online || !organizationRef.current || !request) return;
+        const cancelled = await remote.cancelSignature(organizationRef.current, tenantId, request.id);
+        dispatch({ type: 'updateTenant', tenantId, patch: { signatureRequest: cancelled } });
+      },
+      signatureDocument: async (tenantId) => {
+        const request = stateRef.current.tenants.find((t) => t.id === tenantId)?.signatureRequest;
+        if (!online || !organizationRef.current || !request) {
+          throw new Error('Contrat introuvable.');
+        }
+        const { html } = await remote.signatureDocument(organizationRef.current, tenantId, request.id);
+        return html;
       },
       regenerateTenantLink: async (tenantId) => {
         if (!online || !organizationRef.current) {

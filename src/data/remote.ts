@@ -22,6 +22,7 @@ import type {
   Property,
   PropertyType,
   Settlement,
+  SignatureRequest,
   Tenant,
   Unit,
 } from './types';
@@ -264,6 +265,8 @@ type ApiLease = {
   contract?: ApiLeaseContract | null;
   /** États des lieux ; vide pour qui ne gère pas les baux */
   inspections?: ApiInspection[];
+  /** Dernière demande de signature à distance ; null pour qui ne gère pas les baux */
+  signatureRequest?: SignatureRequest | null;
 };
 
 export type ApiInspection = Omit<Inspection, 'photos'> & { photos: { id: string; url: string | null; contentType: string; createdAt: string }[] };
@@ -473,6 +476,7 @@ export function fromSnapshot(s: ApiSnapshot, today: Date): RemoteData {
     portalUrl: l.tenantLink ?? undefined,
     contract: l.contract ? toContract(l.contract) : undefined,
     inspections: Object.fromEntries((l.inspections ?? []).map((i) => [i.kind, toInspection(i)])),
+    signatureRequest: l.signatureRequest ?? undefined,
     advanceMonths: l.advanceMonths,
     advanceMonthsLeft: new Set(payments.filter((p) => p.tenantId === l.id && p.period > current).map((p) => p.period)).size,
   }));
@@ -673,6 +677,17 @@ export const remote = {
 
   removeInspectionPhoto: (orgId: string, leaseId: string, kind: InspectionKind, photoId: string) =>
     api.delete<void>(`/user/organizations/${orgId}/leases/${leaseId}/inspections/${kind}/photos/${photoId}`),
+
+  /** Envoie le contrat à signer à distance (offres payantes) ; renvoyer le même `id` rend la même demande */
+  requestSignature: (orgId: string, leaseId: string, body: { id: string; html: string; landlordSignature: string }) =>
+    api.post<SignatureRequest>(`/user/organizations/${orgId}/leases/${leaseId}/signature-requests`, body),
+
+  cancelSignature: (orgId: string, leaseId: string, requestId: string) =>
+    api.delete<SignatureRequest>(`/user/organizations/${orgId}/leases/${leaseId}/signature-requests/${requestId}`),
+
+  /** Contrat tel qu'envoyé, ou signé avec le certificat de signature */
+  signatureDocument: (orgId: string, leaseId: string, requestId: string) =>
+    api.get<{ html: string; signed: boolean }>(`/user/organizations/${orgId}/leases/${leaseId}/signature-requests/${requestId}/document`),
 
   removeContractPage: (orgId: string, leaseId: string, documentId: string) =>
     api.delete<void>(`/user/organizations/${orgId}/leases/${leaseId}/documents/${documentId}`),

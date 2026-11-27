@@ -56,6 +56,8 @@ export type Tenant = {
   settlement?: Settlement;
   /** Lien de l'espace locataire (compte en ligne, bail en cours) */
   portalUrl?: string;
+  /** Dernière demande de signature électronique du contrat (en attente, signée ou annulée) */
+  signatureRequest?: SignatureRequest;
   /** Contrat de bail : usage, identité du locataire, charges, garant, clauses, pages du contrat signé */
   contract?: LeaseContract;
   /** États des lieux d'entrée et de sortie */
@@ -227,4 +229,21 @@ export type PaymentDeclaration = {
   /** Capture d'écran envoyée par le locataire (lien signé) */
   proofUrl?: string;
   createdAt: string;
+};
+
+/** Signature électronique du bail à distance : le contrat envoyé au locataire, qui signe derrière son lien personnel */
+export type SignatureRequest = {
+  id: string;
+  status: 'pending' | 'signed' | 'cancelled';
+  /** Empreinte SHA-256 du contrat envoyé */
+  documentHash: string;
+  signerName: string;
+  /** Numéro auquel le code de signature est envoyé */
+  phone: string;
+  codeSentAt: string | null;
+  signedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  /** Page de signature du locataire ; null après son départ */
+  url: string | null;
 };

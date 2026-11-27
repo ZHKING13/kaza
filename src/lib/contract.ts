@@ -38,7 +38,15 @@ type ContractArgs = {
   contract: LeaseContract;
   leaseSettings?: LeaseSettings;
   payoutAccounts?: PayoutAccount[];
+  /** Signature électronique à distance : signature du bailleur imprimée, place réservée à celle du locataire */
+  electronic?: { landlordSignature: string };
 };
+
+/** Place de la signature du locataire : le serveur y met sa signature une fois signé (même repère côté API) */
+export const TENANT_SIGNATURE_MARKER = '<!--kaza:signature-locataire-->';
+
+const signatureSvg = (path: string) =>
+  `<svg viewBox="0 0 320 140" width="200" height="88" style="display:block"><path d="${esc(path)}" fill="none" stroke="#0F172A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const blank = '……………………………';
 const value = (v: string | null | undefined) => (v && v.trim() ? esc(v.trim()) : blank);
@@ -104,14 +112,30 @@ function guarantor(contract: LeaseContract, party: string) {
   }${g.phone ? `<br>${esc(formatPhone(g.phone))}` : ''}<br><span style="color:#475569">S’engage à payer à la place ${party === 'le preneur' ? 'du preneur' : 'du locataire'} les sommes dues au titre du présent bail, si celui-ci ne les paie pas.</span></div>`;
 }
 
-function signatures(contract: LeaseContract, property: Property, brand: Branding) {
+function signatures(contract: LeaseContract, property: Property, brand: Branding, electronic?: ContractArgs['electronic']) {
   const place = contract.terms.signaturePlace || property.city;
   const cols = ['Le bailleur', contract.usage === 'professional' ? 'Le preneur' : 'Le locataire', ...(contract.terms.guarantor ? ['La caution solidaire'] : [])];
-  return `<div class="avoid"><p style="margin-top:22px">Fait à ${esc(place)}, le ${blank}, en ${cols.length} exemplaires originaux.</p>
+  // Signé à distance : chaque partie signe sur son téléphone ; dates et preuves au certificat joint
+  const above = (i: number) =>
+    electronic
+      ? i === 0
+        ? `${brand?.stamp ? `<img class="stamp" src="${brand.stamp}" alt="Cachet">` : ''}${signatureSvg(electronic.landlordSignature)}`
+        : i === 1
+          ? `<div style="min-height:88px">${TENANT_SIGNATURE_MARKER}</div>`
+          : ''
+      : i === 0 && brand?.stamp
+        ? `<img class="stamp" src="${brand.stamp}" alt="Cachet">`
+        : '';
+  const intro = electronic
+    ? `<p style="margin-top:22px">Contrat signé électroniquement par le bailleur et ${cols[1] === 'Le preneur' ? 'le preneur' : 'le locataire'}. La date, l’heure et les preuves de la signature figurent au certificat de signature joint.${
+        contract.terms.guarantor ? ' La caution solidaire signe sur un exemplaire papier.' : ''
+      }</p>`
+    : `<p style="margin-top:22px">Fait à ${esc(place)}, le ${blank}, en ${cols.length} exemplaires originaux.</p>`;
+  return `<div class="avoid">${intro}
   <div class="sign">${cols
     .map(
       (c, i) =>
-        `<div>${i === 0 && brand?.stamp ? `<img class="stamp" src="${brand.stamp}" alt="Cachet">` : ''}<div class="line">${esc(c)}<br>« ${
+        `<div>${above(i)}<div class="line"${electronic && i < 2 ? ' style="margin-top:6px"' : ''}>${esc(c)}<br>« ${
           c === 'La caution solidaire' ? 'Bon pour caution solidaire' : 'Lu et approuvé'
         } »</div></div>`,
     )
@@ -124,7 +148,7 @@ const draftNote = () =>
     : '<p class="note" style="margin-top:10px">Projet établi avec Kaza. Modèle en cours de relecture juridique : relisez-le, et faites-le vérifier si besoin, avant de le signer.</p>';
 
 /** Contrat de bail à usage d'habitation ou professionnel, selon `contract.usage`. */
-export function contractHtml({ identity, profile, tenant, unit, property, contract, leaseSettings, payoutAccounts }: ContractArgs) {
+export function contractHtml({ identity, profile, tenant, unit, property, contract, leaseSettings, payoutAccounts, electronic }: ContractArgs) {
   const brand = branding(identity, profile);
   const professional = contract.usage === 'professional';
   const title = professional ? 'Bail à usage professionnel' : 'Bail à usage d’habitation';
@@ -207,7 +231,7 @@ export function contractHtml({ identity, profile, tenant, unit, property, contra
     ${guarantor(contract, professional ? 'le preneur' : 'le locataire')}
     <p>Il a été convenu ce qui suit.</p>
     ${articles.join('')}
-    ${signatures(contract, property, brand)}
+    ${signatures(contract, property, brand, electronic)}
     <p style="margin-top:16px;color:#475569">Annexes : état des lieux d’entrée ; copie des pièces d’identité.</p>
     <div class="foot">Contrat établi avec Kaza${CONTRACT_TEMPLATE_REVIEWED ? '' : ' (modèle en cours de relecture juridique)'}. Un exemplaire pour chaque partie.</div>`,
     brand,

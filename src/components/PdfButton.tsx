@@ -16,7 +16,8 @@ export function PdfButton({
   variant = 'secondary',
 }: {
   label: string;
-  html: () => string;
+  /** Document à imprimer ; peut venir du serveur (contrat signé) */
+  html: () => string | Promise<string>;
   fileName: string;
   variant?: 'primary' | 'secondary';
 }) {
@@ -34,7 +35,7 @@ export function PdfButton({
           setBusy(true);
           setError(undefined);
           try {
-            await sharePdf(html(), fileName);
+            await sharePdf(await html(), fileName);
           } catch {
             setError('Le PDF n’a pas pu être créé. Réessayez dans un instant.');
           } finally {

@@ -71,6 +71,12 @@ export function describeActivity(e: ActivityEntry): string {
       return `${who} a ajouté une page du contrat signé de ${subject}`;
     case 'lease.document_removed':
       return `${who} a retiré une page du contrat signé de ${subject}`;
+    case 'lease.signature_requested':
+      return `${who} a envoyé le contrat de bail à ${subject} pour signature`;
+    case 'lease.signature_cancelled':
+      return `${who} a annulé la demande de signature du contrat de ${subject}`;
+    case 'lease.contract_signed':
+      return `${subject} a signé son contrat de bail à distance`;
     case 'lease.inspection_saved':
       return `${who} a ${d.signed ? 'signé' : 'enregistré'} l’état des lieux ${d.kind === 'exit' ? 'de sortie' : 'd’entrée'} de ${subject}`;
     case 'organization.identity_updated': {

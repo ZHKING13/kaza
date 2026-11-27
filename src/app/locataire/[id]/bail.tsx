@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FormError } from '@/components/FormError';
 import { PdfButton } from '@/components/PdfButton';
 import { PhoneField } from '@/components/PhoneField';
+import { RemoteSignature } from '@/components/RemoteSignature';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { type Country, countries, splitPhone } from '@/data/countries';
@@ -148,7 +149,7 @@ export default function BailLocataire() {
   };
 
   const pages = saved.pages;
-  const html = () =>
+  const html = (landlordSignature?: string) =>
     contractHtml({
       identity,
       profile,
@@ -158,6 +159,7 @@ export default function BailLocataire() {
       contract: { ...draft(), pages },
       leaseSettings: settings.leases,
       payoutAccounts: settings.payoutAccounts,
+      electronic: landlordSignature ? { landlordSignature } : undefined,
     });
 
   return (
@@ -257,10 +259,17 @@ export default function BailLocataire() {
           </Text>
         ) : null}
         <Button label={busy ? 'Enregistrement…' : 'Enregistrer'} icon={Check} variant="secondary" disabled={busy} onPress={save} />
-        <PdfButton label="Partager le contrat (PDF)" html={html} fileName={contractFileName(tenant, unit)} variant="primary" />
+        <PdfButton label="Partager le contrat (PDF)" html={() => html()} fileName={contractFileName(tenant, unit)} variant="primary" />
         <Text variant="small" tone="muted">
           Le PDF reprend ce qui est à l’écran, même sans réseau.
         </Text>
+
+        <RemoteSignature
+          tenant={tenant}
+          html={(signature) => html(signature)}
+          fileName={contractFileName(tenant, unit)}
+          beforeSend={() => updateContract(tenant.id, draft())}
+        />
 
         <Section
           title="Contrat signé"
